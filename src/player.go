@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"image"
 	"math/rand"
+	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -92,6 +94,12 @@ func (app *MiyooPod) playCurrentQueueTrack() {
 
 	app.updateCoverflowForCurrentTrack()
 	app.NPCacheDirty = true
+
+	// Reset lyrics state for new track
+	app.LyricsCachedTrack = ""
+	app.LyricsLastActiveLRC = -1
+	app.LyricsScrollOffset = 0
+	app.LyricsManualScroll = false
 
 	// Persist queue state when track changes
 	app.savePlaybackState()
@@ -430,5 +438,52 @@ func (app *MiyooPod) renderNowPlayingFull() {
 	dc.DrawString("Hold L/R to seek", float64(infoX), float64(infoStartY+125))
 	dc.DrawString("X Repeat · SELECT Shuffle", float64(infoX), float64(infoStartY+150))
 
+	// Format tag (FLAC / MP3 / OGG + bitrate)
+	app.drawFormatTag(track, float64(infoX), float64(infoStartY+175))
+
 	app.drawStatusIndicators(infoStartY + 250)
+}
+
+// drawFormatTag draws a small pill badge showing the audio format (e.g. "FLAC") and
+// average bitrate (e.g. "1234 kbps") to the right of it, matching the button hint style.
+func (app *MiyooPod) drawFormatTag(track *Track, x, y float64) {
+	dc := app.DC
+	dc.SetFontFace(app.FontSmall)
+
+	ext := strings.ToLower(filepath.Ext(track.Path))
+	var label string
+	switch ext {
+	case ".flac":
+		label = "FLAC"
+	case ".ogg":
+		label = "OGG"
+	case ".mp3":
+		label = "MP3"
+	default:
+		label = strings.ToUpper(strings.TrimPrefix(ext, "."))
+	}
+
+	// Badge — same geometry as drawButtonLegend
+	labelW, _ := dc.MeasureString(label)
+	badgePad := 6.0
+	badgeW := labelW + badgePad*2
+	badgeH := 20.0
+	badgeY := y - badgeH/2
+
+	dc.SetHexColor(app.CurrentTheme.ProgBG)
+	dc.DrawRoundedRectangle(x, badgeY, badgeW, badgeH, 4)
+	dc.Fill()
+
+	dc.SetHexColor(app.CurrentTheme.HeaderTxt)
+	dc.DrawStringAnchored(label, x+badgeW/2, y-1, 0.5, 0.5)
+
+	// Bitrate and sample rate to the right of the badge
+	dc.SetHexColor(app.CurrentTheme.Dim)
+	if track.Bitrate > 0 && track.SampleRate > 0 {
+		dc.DrawStringAnchored(fmt.Sprintf("%d kbps · %g kHz", track.Bitrate, float64(track.SampleRate)/1000), x+badgeW+6, y, 0, 0.5)
+	} else if track.Bitrate > 0 {
+		dc.DrawStringAnchored(fmt.Sprintf("%d kbps", track.Bitrate), x+badgeW+6, y, 0, 0.5)
+	} else if track.SampleRate > 0 {
+		dc.DrawStringAnchored(fmt.Sprintf("%g kHz", float64(track.SampleRate)/1000), x+badgeW+6, y, 0, 0.5)
+	}
 }

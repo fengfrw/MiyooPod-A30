@@ -10,7 +10,7 @@ import (
 
 // App metadata
 const (
-	APP_VERSION = "0.0.5"
+	APP_VERSION = "0.0.6"
 	APP_AUTHOR  = "Danilo Fragoso"
 	SUPPORT_URL = "https://github.com/danfragoso/miyoopod"
 )
@@ -424,6 +424,9 @@ type Track struct {
 	Genre       string  `json:"genre"`
 	Duration    float64 `json:"duration"`
 	HasArt      bool    `json:"has_art"`
+	Bitrate     int     `json:"bitrate,omitempty"`
+	SampleRate  int     `json:"sample_rate,omitempty"`
+	Lyrics      string  `json:"lyrics,omitempty"`
 }
 
 type Album struct {
@@ -478,6 +481,7 @@ const (
 	ScreenQueue
 	ScreenAlbumArt
 	ScreenLibraryScan
+	ScreenLyrics
 )
 
 func (s ScreenType) String() string {
@@ -492,6 +496,8 @@ func (s ScreenType) String() string {
 		return "album_art"
 	case ScreenLibraryScan:
 		return "library_scan"
+	case ScreenLyrics:
+		return "lyrics"
 	default:
 		return "unknown"
 	}
@@ -586,10 +592,11 @@ type MiyooPod struct {
 	Digits *DigitSprites
 
 	// Key repeat state
-	LastKeyTime time.Time
-	LastKey     Key
-	RepeatDelay time.Duration
-	RepeatRate  time.Duration
+	LastKeyTime    time.Time
+	LastRepeatTime time.Time
+	LastKey        Key
+	RepeatDelay    time.Duration
+	RepeatRate     time.Duration
 
 	// Error popup state
 	ErrorMessage string
@@ -606,6 +613,7 @@ type MiyooPod struct {
 	PowerButtonPressTime time.Time   // When power button was pressed (for long-hold detection)
 	PowerButtonPressed   bool        // Whether power button is currently held
 	MenuKeyPressed       bool        // Whether MENU key is currently held (for brightness control)
+	SelectKeyPressed     bool        // Whether SELECT is currently held (for combo shortcuts)
 	AutoLockMinutes      int         // Minutes of inactivity before auto-lock (0 = disabled)
 	ScreenPeekEnabled    bool        // Whether pressing buttons while locked briefly shows the screen
 	ScreenPeekActive     bool        // Whether screen is temporarily visible while locked
@@ -646,7 +654,16 @@ type MiyooPod struct {
 	LibScanStatus    string // Status text
 	LibScanElapsed   string // Elapsed time for results display
 	LibScanPhase     string // Current phase: "scanning", "sorting", "decoding", "saving"
-	QueueSelectedIndex int      // Selected track in queue view
+	QueueSelectedIndex  int // Selected track in queue view
+
+	// Lyrics screen state
+	LyricsScrollOffset  int                 // Line offset for scrolling lyrics
+	LyricsManualScroll  bool                // True when user has manually scrolled (disables auto-follow)
+	LyricsCachedTrack   string              // Track path whose wrapped lines are cached
+	LyricsCachedLRC     []lrcLine           // Parsed timed lines (nil for plain text)
+	LyricsCachedDisplay []lyricsDisplayLine // Word-wrapped display rows for LRC
+	LyricsPlainLines    []string            // Word-wrapped rows for plain text
+	LyricsLastActiveLRC int                 // Last active LRC index (for change detection in poller)
 
 	// Settings
 	InstallationID   string // Unique ID for this installation

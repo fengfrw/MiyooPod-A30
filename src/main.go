@@ -281,17 +281,36 @@ func main() {
 	for app.Running {
 		keyEvent := C_GetKeyPress()
 		if keyEvent != -1 {
-			// Log the keycode for debugging
 			if keyEvent < 0 {
-				// Key release event (negative value)
-				// Convert back: -(keycode + 1) -> keycode
+				// Key release — clear repeat state if it's the held key
 				keyReleased := Key(-keyEvent - 1)
 				app.handleKeyRelease(keyReleased)
+				if keyReleased == app.LastKey {
+					app.LastKey = NONE
+				}
 			} else {
-				// Key press event (positive value)
-				app.handleKey(Key(keyEvent))
+				key := Key(keyEvent)
+				app.handleKey(key)
+				// Arm repeat for navigation keys
+				if key == UP || key == DOWN || key == LEFT || key == RIGHT {
+					app.LastKey = key
+					app.LastKeyTime = time.Now()
+				}
 			}
 		}
+
+		// Software key repeat for held navigation keys.
+		// LastKeyTime = when key was first pressed (for initial delay).
+		// LastRepeatTime = when we last fired a repeat (for rate limiting).
+		if app.LastKey != NONE {
+			now := time.Now()
+			if now.Sub(app.LastKeyTime) >= app.RepeatDelay &&
+				now.Sub(app.LastRepeatTime) >= app.RepeatRate {
+				app.handleKey(app.LastKey)
+				app.LastRepeatTime = now
+			}
+		}
+
 		app.pollSeek()
 		app.pollMarquee()
 		// Check if a background goroutine requested a redraw (non-blocking)
@@ -330,6 +349,10 @@ func (app *MiyooPod) setScreenWithContext(screen ScreenType, properties map[stri
 
 // handleKeyRelease handles key release events
 func (app *MiyooPod) handleKeyRelease(key Key) {
+	if key == SELECT {
+		app.SelectKeyPressed = false
+	}
+
 	// Handle seek release on Now Playing screen
 	if (key == L || key == R) && app.SeekHeld {
 		direction := app.seekKeyReleased()
@@ -349,6 +372,17 @@ func (app *MiyooPod) handleKeyRelease(key Key) {
 func (app *MiyooPod) handleKey(key Key) {
 	// Update last activity time for any key press
 	app.LastActivityTime = time.Now()
+
+	// Track SELECT hold state
+	if key == SELECT {
+		app.SelectKeyPressed = true
+	}
+
+	// SELECT + START = quit
+	if key == START && app.SelectKeyPressed {
+		app.Running = false
+		return
+	}
 
 	// If update prompt is showing, it consumes all keys
 	if app.handleUpdatePromptKey(key) {
@@ -398,6 +432,10 @@ func (app *MiyooPod) handleKey(key Key) {
 		// Go to Now Playing screen (not allowed during library scan or album art fetch)
 		if app.CurrentScreen == ScreenLibraryScan || app.CurrentScreen == ScreenAlbumArt {
 			return
+		}
+		// Let ScreenNowPlaying handle START itself (e.g. to open lyrics)
+		if app.CurrentScreen == ScreenNowPlaying {
+			break
 		}
 		if app.Playing != nil && app.Playing.Track != nil {
 			if app.SearchActive {
@@ -460,6 +498,8 @@ func (app *MiyooPod) handleKey(key Key) {
 		app.handleAlbumArtKey(key)
 	case ScreenLibraryScan:
 		app.handleLibraryScanKey(key)
+	case ScreenLyrics:
+		app.handleLyricsKey(key)
 	}
 }
 
@@ -482,6 +522,13 @@ func (app *MiyooPod) handleNowPlayingKey(key Key) {
 		// Cycle repeat mode
 		app.cycleRepeat()
 		app.drawCurrentScreen()
+	case START:
+		// Open lyrics screen if lyrics are available
+		if app.Playing != nil && app.Playing.Track != nil && app.Playing.Track.Lyrics != "" {
+			app.LyricsScrollOffset = 0
+			app.setScreen(ScreenLyrics)
+			app.drawCurrentScreen()
+		}
 	}
 }
 
@@ -502,6 +549,8 @@ func (app *MiyooPod) drawCurrentScreen() {
 	case ScreenLibraryScan:
 		app.drawLibraryScanScreen()
 		app.drawLibraryScanStatusBar()
+	case ScreenLyrics:
+		app.drawLyricsScreen()
 	}
 
 	// Draw lock overlay if locked

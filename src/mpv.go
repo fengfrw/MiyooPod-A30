@@ -45,6 +45,16 @@ func (app *MiyooPod) startPlaybackPoller() {
 				}
 			}
 
+			// Redraw lyrics screen only when the highlighted LRC line changes,
+			// and only when the user is not holding a scroll key (avoids flash during scroll).
+			if app.CurrentScreen == ScreenLyrics && app.LyricsCachedLRC != nil && app.LastKey == NONE {
+				activeLRC := activeLRCIndex(app.LyricsCachedLRC, app.Playing.Position)
+				if activeLRC != app.LyricsLastActiveLRC {
+					app.LyricsLastActiveLRC = activeLRC
+					app.requestRedraw()
+				}
+			}
+
 			// Flush audio buffers every 5 seconds to prevent choppy playback
 			// Mimics the fix that happens when user manually pauses/resumes
 			tickCount++

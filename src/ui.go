@@ -40,8 +40,9 @@ func (app *MiyooPod) drawHeader(title string) {
 	}
 	availableW := float64(SCREEN_WIDTH) - titleX - 8 // 8px right margin
 
-	// Don't show now playing info in header when already on the Now Playing screen
+	// Don't show now playing info in header on Now Playing or Lyrics screens
 	hasNowPlaying := app.CurrentScreen != ScreenNowPlaying &&
+		app.CurrentScreen != ScreenLyrics &&
 		app.Playing != nil && app.Playing.Track != nil && app.Playing.State != StateStopped
 
 	// Split available space: 70% title, 30% now playing (with gap)
@@ -165,7 +166,8 @@ func (app *MiyooPod) advanceMarquee() {
 // pollMarquee does a partial framebuffer update for the marquee text area.
 // Called from the main loop at ~30Hz. Only updates when marquee is actively scrolling.
 func (app *MiyooPod) pollMarquee() {
-	if app.MarqueeBuf == nil || app.CurrentScreen != ScreenMenu || app.MarqueeDstW <= 0 || app.Locked || app.OverlayVisible {
+	screenHasMarquee := app.CurrentScreen == ScreenMenu || app.CurrentScreen == ScreenQueue
+	if app.MarqueeBuf == nil || !screenHasMarquee || app.MarqueeDstW <= 0 || app.Locked || app.OverlayVisible || app.LastKey != NONE {
 		return
 	}
 
@@ -705,11 +707,20 @@ func (app *MiyooPod) drawStatusBar() {
 		app.drawButtonLegend(110, centerY, "A", "Play/Pause")
 		app.drawButtonLegend(270, centerY, "L/R", "Prev/Next")
 		app.drawButtonLegend(400, centerY, "→", "Queue")
+		if app.Playing != nil && app.Playing.Track != nil && app.Playing.Track.Lyrics != "" {
+			app.drawButtonLegend(510, centerY, "START", "Lyrics")
+		}
 	case ScreenQueue:
 		app.drawButtonLegend(12, centerY, "B", "Back")
 		app.drawButtonLegend(100, centerY, "A", "Play")
 		app.drawButtonLegend(200, centerY, "X", "Remove")
 		app.drawButtonLegend(320, centerY, "SELECT", "Clear All")
+	case ScreenLyrics:
+		app.drawButtonLegend(12, centerY, "B", "Back")
+		app.drawButtonLegend(110, centerY, "↑↓", "Scroll")
+		if app.LyricsManualScroll {
+			app.drawButtonLegend(230, centerY, "A", "Auto-follow")
+		}
 	}
 
 }

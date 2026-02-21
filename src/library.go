@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"image"
@@ -63,7 +64,7 @@ func (app *MiyooPod) runLibraryScan(onComplete func()) {
 
 		ext := strings.ToLower(filepath.Ext(path))
 		switch ext {
-		case ".mp3":
+		case ".mp3", ".flac", ".ogg":
 			app.scanTrack(path)
 			fileCount++
 			app.LibScanCount = fileCount
@@ -171,6 +172,7 @@ func (app *MiyooPod) scanTrack(path string) {
 		track.DiscNum, _ = m.Disc()
 		track.Year = m.Year()
 		track.Genre = m.Genre()
+		track.Lyrics = m.Lyrics()
 
 		if pic := m.Picture(); pic != nil {
 			track.HasArt = true
@@ -189,6 +191,16 @@ func (app *MiyooPod) scanTrack(path string) {
 	if track.Duration == 0 {
 		logMsg(fmt.Sprintf("[SCAN] Warning: Could not extract duration for: %s", filepath.Base(path)))
 	}
+
+	// Derive average bitrate from file size and duration (kbps)
+	if track.Duration > 0 {
+		if info, err := os.Stat(path); err == nil {
+			track.Bitrate = int(float64(info.Size()) * 8 / track.Duration / 1000)
+		}
+	}
+
+	// Read sample rate from file header
+	track.SampleRate = readSampleRate(path)
 
 	// Fallback: use filename as title
 	if track.Title == "" {
@@ -771,4 +783,77 @@ func (app *MiyooPod) loadLibraryJSON() error {
 		len(lib.Tracks), len(lib.Albums), len(lib.Artists), len(lib.Playlists), time.Since(start)))
 
 	return nil
+}
+
+// readSampleRate parses the sample rate directly from the audio file header.
+// Supports FLAC (STREAMINFO block), OGG Vorbis (identification header), and MP3 (sync frame).
+func readSampleRate(path string) int {
+	f, err := os.Open(path)
+	if err != nil {
+		return 0
+	}
+	defer f.Close()
+
+	ext := strings.ToLower(filepath.Ext(path))
+	switch ext {
+	case ".flac":
+		// fLaC marker (4) + block header (4) + 2 bytes min block size + 2 bytes max block size
+		// + 3 bytes min frame size + 3 bytes max frame size = 14 bytes before the sample rate field.
+		// Sample rate is the top 20 bits of the next 3 bytes.
+		var magic [4]byte
+		if err := binary.Read(f, binary.BigEndian, &magic); err != nil || string(magic[:]) != "fLaC" {
+			return 0
+		}
+		// Skip 4-byte block header
+		var hdr [4]byte
+		if _, err := f.Read(hdr[:]); err != nil {
+			return 0
+		}
+		// Skip 10 bytes (min/max block sizes + min/max frame sizes)
+		if _, err := f.Seek(10, 1); err != nil {
+			return 0
+		}
+		// Read 3 bytes; sample rate is the upper 20 bits
+		var b [3]byte
+		if _, err := f.Read(b[:]); err != nil {
+			return 0
+		}
+		return int(b[0])<<12 | int(b[1])<<4 | int(b[2])>>4
+
+	case ".ogg":
+		// Scan for the vorbis identification packet "\x01vorbis",
+		// then 4-byte version + 1-byte channels + 4-byte LE sample rate.
+		buf := make([]byte, 256)
+		n, _ := f.Read(buf)
+		idx := bytes.Index(buf[:n], []byte("\x01vorbis"))
+		if idx < 0 {
+			return 0
+		}
+		off := idx + 11 // 7 header bytes + 4 version bytes
+		if off+4 > n {
+			return 0
+		}
+		return int(binary.LittleEndian.Uint32(buf[off : off+4]))
+
+	case ".mp3":
+		// Scan for the first valid MP3 sync frame (0xFF 0xE0 mask).
+		buf := make([]byte, 4096)
+		n, _ := f.Read(buf)
+		mp3SampleRates := [4][4]int{
+			{11025, 12000, 8000, 0},  // MPEG 2.5
+			{0, 0, 0, 0},             // reserved
+			{22050, 24000, 16000, 0}, // MPEG 2
+			{44100, 48000, 32000, 0}, // MPEG 1
+		}
+		for i := 0; i < n-3; i++ {
+			if buf[i] == 0xFF && (buf[i+1]&0xE0) == 0xE0 {
+				mpegVer := (buf[i+1] >> 3) & 0x3
+				srIdx := (buf[i+2] >> 2) & 0x3
+				if srIdx < 3 {
+					return mp3SampleRates[mpegVer][srIdx]
+				}
+			}
+		}
+	}
+	return 0
 }

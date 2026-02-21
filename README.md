@@ -1,12 +1,8 @@
 # MiyooPod
 
-MP3 player for the Miyoo Mini Plus running OnionOS. Inspired by the classic iPod interface.
+MP3 player for the Miyoo Mini Plus, Mini v4, and Mini Flip running OnionOS. Inspired by the classic iPod interface.
 
 ![MiyooPod](screenshots/hero.png)
-
-## ⚠️ First Release Notice
-
-This is the first release of MiyooPod. While functional, it may contain bugs and rough edges. Please report any issues or request features on [GitHub Issues](https://github.com/danfragoso/miyoopod/issues).
 
 ## Features
 
@@ -20,6 +16,8 @@ This is the first release of MiyooPod. While functional, it may contain bugs and
 - Session persistence (queue, position, shuffle/repeat restored on launch)
 - Native 640×480 resolution optimized for Miyoo Mini
 - 17 customizable themes (Classic iPod, Dark Blue, Nord, Cyberpunk, and more)
+- MP3, FLAC, and OGG/Vorbis playback
+- Lyrics display with LRC timed sync and auto-scroll
 
 ## Installation
 
@@ -44,16 +42,18 @@ MiyooPod reads music files from your SD card's Music folder:
 4. Organize your music by artist/album folders for better library organization
 5. Launch MiyooPod - it will automatically scan and index your music library
 
-## Recommended Format
+## Supported Formats
 
-**Officially Supported Format:** MP3 @ 256kbps
+MiyooPod supports **MP3**, **FLAC**, and **OGG/Vorbis** audio files.
+
+**Recommended Format:** MP3 @ 256kbps
 
 - **Format:** MP3 (MPEG-1 Audio Layer 3)
 - **Bitrate:** 256kbps CBR (Constant Bitrate) or VBR V0
 - **Sample Rate:** 44.1kHz
 - **Channels:** Stereo
 
-> **Note:** The Miyoo Mini Plus audio output is not high quality enough to justify higher bitrate files. Playback might be choppy with higher bitrate files.
+> **Note:** The Miyoo Mini Plus audio output is not high quality enough to justify higher bitrate files. Playback might be choppy with higher bitrate files. FLAC files are supported but MP3 is recommended for best performance on the Miyoo Mini's limited hardware.
 
 ## Album Artwork
 
@@ -86,7 +86,7 @@ For albums without embedded artwork, MiyooPod can automatically fetch album cove
 Built using **Go 1.22.2** with native C bindings (CGO) for graphics and audio.
 
 ### Architecture
-- **Platform:** Miyoo Mini Plus / OnionOS
+- **Platform:** Miyoo Mini Plus, Mini v4, Mini Flip / OnionOS
 - **CPU:** ARM Cortex-A7 (dual-core)
 - **Resolution:** 640×480 native
 - **Cross-compilation:** arm-linux-gnueabihf-gcc
@@ -104,6 +104,41 @@ Built using **Go 1.22.2** with native C bindings (CGO) for graphics and audio.
 - Text measurement and album art caching
 - Library metadata cached as JSON for fast startup
 
+## Troubleshooting
+
+### App does not launch / crashes on startup
+
+The library cache files may be corrupted. Connect your SD card to your computer and delete the hidden JSON files in the music folder:
+
+```
+/mnt/SDCARD/Media/Music/.miyoopod_library.json
+/mnt/SDCARD/Media/Music/.miyoopod_state.json
+```
+
+MiyooPod will rescan your library on the next launch.
+
+### Album art not displaying correctly
+
+Open **Settings** → **Clear App Data** to wipe the artwork cache and library metadata. MiyooPod will rebuild everything on the next launch. You can then use **Fetch Album Art** again to re-download missing covers.
+
+### Checking logs
+
+If the app is misbehaving, enable logging from **Settings** → **Toggle Logs**, then reproduce the issue and check the log file on your SD card:
+
+```
+/mnt/SDCARD/App/MiyooPod/miyoopod.log
+```
+
+Attach this file when reporting a bug on [GitHub Issues](https://github.com/danfragoso/miyoopod/issues).
+
+### A broken OTA update made the app unusable
+
+If an update left the app in a broken state, manually reinstall the latest version:
+
+1. Download [MiyooPod.zip](https://github.com/danfragoso/miyoopod/raw/refs/heads/main/releases/MiyooPod.zip)
+2. Extract and copy the `MiyooPod` folder to `/App` on your SD card, overwriting the existing files
+3. Your music library and settings are stored separately and will not be affected
+
 ## Building from Source
 
 ```bash
@@ -114,6 +149,13 @@ make go
 The build process uses CGO to compile Go source with C bindings and bundles all required shared libraries.
 
 ## Changelog
+
+### Version 0.0.6
+- 🎵 FLAC and OGG/Vorbis playback support (decoded via statically linked drflac and stb_vorbis in SDL2_mixer)
+- 📝 Lyrics support: embedded lyrics (ID3 USLT, Vorbis comments) displayed with word-wrap and scroll
+- 🎤 LRC timed lyrics: synced highlighting of the current line with auto-scroll and manual scroll override
+- ⏩ Hold ↑/↓ to scroll lists continuously without repeated presses
+- ❌ SELECT + START to quit the app
 
 ### Version 0.0.5
 - 🔄 Over-the-air updates with download progress, checksum verification, and automatic rollback on failure
