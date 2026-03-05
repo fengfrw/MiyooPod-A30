@@ -1,5 +1,5 @@
---- src/logger.go.orig	2026-03-04 18:16:33.019587059 -0700
-+++ src/logger.go	2026-03-04 18:27:20.690760299 -0700
+--- a/src/logger.go
++++ b/src/logger.go
 @@ -126,6 +126,8 @@
  		// Both v4 and flip have the same resolution
  		// We'll label them as v4 by default, could be either
