@@ -7,29 +7,25 @@
 #include <sys/mman.h>
 #include <linux/fb.h>
 #include <SDL.h>
-
 // Forward declarations for Go functions
 extern void GoLogMsg(char* msg);
 extern void DetectDevice(int width, int height);
-
 // MiyooPod renders at 640x480 always
 const int RENDER_WIDTH = 640;
 const int RENDER_HEIGHT = 480;
-
 // A30 physical framebuffer: 480x640 portrait, 32bpp, stride 1920
-#define FB_PHYS_W 480
-#define FB_PHYS_H 640
-#define FB_STRIDE 1920  // FB_PHYS_W * 4
-
+// Virtual size is 480x1280 (double-buffered)
+#define FB_PHYS_W  480
+#define FB_PHYS_H  640
+#define FB_STRIDE  1920  // FB_PHYS_W * 4
 static SDL_Window   *window   = NULL;
 static SDL_Renderer *renderer = NULL;
 static SDL_Texture  *texture  = NULL;
-
 // Direct framebuffer access
-static int    fb_fd   = -1;
-static void  *fb_mem  = NULL;
-static size_t fb_size = FB_PHYS_W * FB_PHYS_H * 4;
-
+static int    fb_fd      = -1;
+static void  *fb_mem     = NULL;
+static size_t fb_size    = FB_PHYS_W * FB_PHYS_H * 4 * 2; // both buffers
+static int    fb_buf_idx = 0; // which buffer we're writing to (0 or 1)
 void c_log(const char *msg) {
     char buffer[512];
     snprintf(buffer, sizeof(buffer), "[C] INFO: %s", msg);
@@ -49,7 +45,6 @@ void c_logd(const char *fmt, int val) {
     snprintf(buffer + offset, sizeof(buffer) - offset, fmt, val);
     GoLogMsg(buffer);
 }
-
 int pollEvents() {
     SDL_Event event;
     while (SDL_PollEvent(&event)) {
@@ -62,25 +57,23 @@ int pollEvents() {
     }
     return -1;
 }
-
 /*
  * refreshScreenPtr: rotate 640x480 ABGR8888 → 480x640 and write to /dev/fb0.
+ * Uses double buffering to eliminate screen tearing:
+ *   - Write to back buffer (the buffer NOT currently displayed)
+ *   - Pan display to show the back buffer via FBIOPAN_DISPLAY
+ *   - Swap buffer index
  *
- * 90° CW rotation: src(x, y) → dst(479 - y, x)
- * dst_offset = dst_y * FB_PHYS_W + dst_x  =  x * FB_PHYS_W + (479 - y)
- *
- * Pixel format: MiyooPod texture is SDL_PIXELFORMAT_ABGR8888
- * fb0 on A30 sunxi is ARGB8888 (little-endian: B G R A in memory)
- * ABGR8888 in memory: byte0=A byte1=B byte2=G byte3=R
- * ARGB8888 in memory: byte0=B byte1=G byte2=R byte3=A  (little-endian 0xAARRGGBB)
- * So we swap byte0↔byte3: fb_pixel = (src_pixel >> 8) | ((src_pixel & 0xFF) << 24)
- * Actually let's just try direct copy first — colors may already match.
+ * 90° CCW rotation: src(x, y) → dst(y, 639-x)
+ * dst_offset = dst_y * FB_PHYS_W + dst_x  =  (639-x) * FB_PHYS_W + y
  */
 int refreshScreenPtr(unsigned char *pixels) {
     if (fb_mem == NULL) return -1;
 
+    // Write to back buffer (opposite of currently displayed)
+    int back = 1 - fb_buf_idx;
     unsigned int *src = (unsigned int *)pixels;
-    unsigned int *dst = (unsigned int *)fb_mem;
+    unsigned int *dst = (unsigned int *)fb_mem + back * FB_PHYS_W * FB_PHYS_H;
 
     for (int y = 0; y < RENDER_HEIGHT; y++) {
         for (int x = 0; x < RENDER_WIDTH; x++) {
@@ -97,9 +90,18 @@ int refreshScreenPtr(unsigned char *pixels) {
             dst[dst_y * FB_PHYS_W + dst_x] = fixed;
         }
     }
+
+    // Pan display to show the back buffer
+    struct fb_var_screeninfo vinfo;
+    if (ioctl(fb_fd, FBIOGET_VSCREENINFO, &vinfo) == 0) {
+        vinfo.yoffset = back * FB_PHYS_H;
+        ioctl(fb_fd, FBIOPAN_DISPLAY, &vinfo);
+    }
+
+    // Swap buffer index
+    fb_buf_idx = back;
     return 0;
 }
-
 int init() {
     c_log("SDL2 init (VIDEO | AUDIO)...");
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) < 0) {
@@ -107,7 +109,6 @@ int init() {
         return -1;
     }
     c_log("SDL_Init OK");
-
     // Detect display resolution from framebuffer device
     int fb_detect = open("/dev/fb0", O_RDONLY);
     int display_width = 640, display_height = 480;
@@ -128,7 +129,6 @@ int init() {
         c_log("Could not open /dev/fb0, using default 640x480");
         DetectDevice(640, 480);
     }
-
     // Open framebuffer for direct rendering
     fb_fd = open("/dev/fb0", O_RDWR);
     if (fb_fd < 0) {
@@ -141,10 +141,9 @@ int init() {
             close(fb_fd);
             fb_fd = -1;
         } else {
-            c_log("Direct framebuffer rendering enabled (480x640 with 90 CW rotation)");
+            c_log("Direct framebuffer rendering enabled (double-buffered, 480x640, 90 CCW)");
         }
     }
-
     // Create minimal SDL window for input handling only
     c_log("Creating window...");
     window = SDL_CreateWindow("MiyooPod",
@@ -155,7 +154,6 @@ int init() {
         return -1;
     }
     c_log("Window created");
-
     c_log("Creating renderer...");
     renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
     if (!renderer) {
@@ -163,7 +161,6 @@ int init() {
         return -1;
     }
     c_log("Renderer created");
-
     // Texture still needed as intermediate buffer if fb0 mmap failed
     c_log("Creating texture at 640x480 (ABGR8888)...");
     texture = SDL_CreateTexture(renderer,
@@ -174,14 +171,18 @@ int init() {
         return -1;
     }
     c_log("Texture created");
-
     return 0;
 }
-
 void quit() {
     if (fb_mem) {
-        // Clear framebuffer to black before exit so PyUI can draw cleanly
+        // Clear both framebuffer pages to black before exit
         memset(fb_mem, 0, fb_size);
+        // Pan back to buffer 0
+        struct fb_var_screeninfo vinfo;
+        if (ioctl(fb_fd, FBIOGET_VSCREENINFO, &vinfo) == 0) {
+            vinfo.yoffset = 0;
+            ioctl(fb_fd, FBIOPAN_DISPLAY, &vinfo);
+        }
         munmap(fb_mem, fb_size);
         fb_mem = NULL;
     }
