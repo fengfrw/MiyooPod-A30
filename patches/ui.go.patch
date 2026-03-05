@@ -1,0 +1,20 @@
+--- src/ui.go.orig	2026-03-04 18:16:44.202704635 -0700
++++ src/ui.go	2026-03-04 18:16:56.221206744 -0700
+@@ -962,7 +962,7 @@
+ 
+ // getBrightness reads the current PWM duty_cycle (brightness level)
+ func getBrightness() int {
+-	data, err := os.ReadFile("/sys/class/pwm/pwmchip0/pwm0/duty_cycle")
++	data, err := os.ReadFile("/sys/devices/virtual/disp/disp/attr/lcdbl")
+ 	if err != nil {
+ 		return -1
+ 	}
+@@ -982,7 +982,7 @@
+ 	if level > 100 {
+ 		level = 100
+ 	}
+-	os.WriteFile("/sys/class/pwm/pwmchip0/pwm0/duty_cycle", []byte(fmt.Sprintf("%d", level)), 0644)
++	os.WriteFile("/sys/devices/virtual/disp/disp/attr/lcdbl", []byte(fmt.Sprintf("%d", level*255/100)), 0644)
+ }
+ 
+ // drawVolumeOrBrightnessOverlay draws Mac-style overlay for volume/brightness

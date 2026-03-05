@@ -1,0 +1,24 @@
+--- src/power_mgmt.go.orig	2026-03-04 18:17:16.927048688 -0700
++++ src/power_mgmt.go	2026-03-04 18:17:16.929998845 -0700
+@@ -9,8 +9,8 @@
+ // restoreBrightness sets brightness back to a visible level before app exits
+ func restoreBrightness() {
+ 	// Set to mid-level brightness (duty_cycle range is typically 0-100)
+-	brightnessPath := "/sys/class/pwm/pwmchip0/pwm0/duty_cycle"
+-	defaultBrightness := "50"
++	brightnessPath := "/sys/devices/virtual/disp/disp/attr/lcdbl"
++	defaultBrightness := "128"
+ 
+ 	if err := os.WriteFile(brightnessPath, []byte(defaultBrightness), 0644); err != nil {
+ 		logMsg(fmt.Sprintf("WARNING: Could not restore brightness: %v", err))
+@@ -113,8 +113,8 @@
+ 
+ // dimScreen reduces brightness to minimum (for locked state)
+ func (app *MiyooPod) dimScreen() {
+-	brightnessPath := "/sys/class/pwm/pwmchip0/pwm0/duty_cycle"
+-	dimBrightness := "0"
++	brightnessPath := "/sys/devices/virtual/disp/disp/attr/lcdbl"
++	dimBrightness := "5"
+ 
+ 	if err := os.WriteFile(brightnessPath, []byte(dimBrightness), 0644); err != nil {
+ 		logMsg(fmt.Sprintf("WARNING: Could not dim screen: %v", err))

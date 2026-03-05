@@ -1,0 +1,141 @@
+name: Build MiyooPod for Miyoo A30
+
+on:
+  schedule:
+    - cron: '0 6 * * *'  # Daily at 6am UTC
+  workflow_dispatch:      # Manual trigger
+
+jobs:
+  check-and-build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout MiyooPod-A30
+        uses: actions/checkout@v4
+
+      - name: Get latest upstream version
+        id: upstream
+        run: |
+          LATEST=$(curl -s https://api.github.com/repos/danfragoso/miyoopod/releases/latest | jq -r .tag_name)
+          echo "tag=$LATEST" >> $GITHUB_OUTPUT
+          echo "Upstream latest: $LATEST"
+
+      - name: Get last built version
+        id: last_built
+        run: |
+          LAST=$(curl -s https://api.github.com/repos/${{ github.repository }}/releases/latest | jq -r .tag_name // "none")
+          echo "tag=$LAST" >> $GITHUB_OUTPUT
+          echo "Last built: $LAST"
+
+      - name: Check if build needed
+        id: check
+        run: |
+          if [ "${{ steps.upstream.outputs.tag }}" = "${{ steps.last_built.outputs.tag }}" ]; then
+            echo "needed=false" >> $GITHUB_OUTPUT
+            echo "Already up to date at ${{ steps.upstream.outputs.tag }}"
+          else
+            echo "needed=true" >> $GITHUB_OUTPUT
+            echo "New version available: ${{ steps.upstream.outputs.tag }}"
+          fi
+
+      - name: Clone upstream MiyooPod
+        if: steps.check.outputs.needed == 'true'
+        run: |
+          git clone --depth 1 --branch ${{ steps.upstream.outputs.tag }} \
+            https://github.com/danfragoso/miyoopod.git upstream
+          echo "Cloned upstream at ${{ steps.upstream.outputs.tag }}"
+
+      - name: Apply A30 patches
+        if: steps.check.outputs.needed == 'true'
+        run: |
+          # Apply unified diff patches
+          cd upstream
+          patch -p1 < ../patches/logger.go.patch
+          patch -p1 < ../patches/ui.go.patch
+          patch -p1 < ../patches/power_mgmt.go.patch
+
+          # Copy full file replacements
+          cp ../overlay/src/main.c src/main.c
+          cp ../overlay/src/mi_ao.go src/mi_ao.go
+
+          # Copy launch script
+          cp ../overlay/App/MiyooPod/launch.sh App/MiyooPod/launch.sh
+          chmod +x App/MiyooPod/launch.sh
+
+          echo "Patches applied successfully"
+
+      - name: Copy pre-built libs
+        if: steps.check.outputs.needed == 'true'
+        run: |
+          cp libs/libSDL2_mixer.so upstream/App/MiyooPod/libs/libSDL2_mixer.so
+          cp libs/libSDL2_mixer-2.0.so.0 upstream/App/MiyooPod/libs/libSDL2_mixer-2.0.so.0
+
+      - name: Set up Docker Buildx
+        if: steps.check.outputs.needed == 'true'
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build cross-compile Docker image
+        if: steps.check.outputs.needed == 'true'
+        run: |
+          docker build -f Dockerfile.a30 -t a30-cross .
+
+      - name: Run build-inject (native)
+        if: steps.check.outputs.needed == 'true'
+        run: |
+          cd upstream
+          go run scripts/build-inject.go || true
+
+      - name: Build MiyooPod binary
+        if: steps.check.outputs.needed == 'true'
+        run: |
+          docker run --rm \
+            -v "$(pwd)/upstream":/build \
+            -e CC=arm-linux-gnueabihf-gcc \
+            -e CGO_ENABLED=1 \
+            -e GOARCH=arm \
+            -e GOARM=7 \
+            -e GOOS=linux \
+            a30-cross \
+            sh -c 'go build -a -o App/MiyooPod/MiyooPod src/*.go'
+
+      - name: Package release
+        if: steps.check.outputs.needed == 'true'
+        run: |
+          cd upstream
+          # Remove user-specific files
+          rm -f App/MiyooPod/miyoopod.log
+          rm -f App/MiyooPod/config.json
+          rm -f App/MiyooPod/.DS_Store
+          # Create zip
+          zip -r ../MiyooPod-A30-${{ steps.upstream.outputs.tag }}.zip App/MiyooPod/
+          echo "Package created"
+          ls -lh ../MiyooPod-A30-${{ steps.upstream.outputs.tag }}.zip
+
+      - name: Create GitHub Release
+        if: steps.check.outputs.needed == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.upstream.outputs.tag }}
+          name: MiyooPod ${{ steps.upstream.outputs.tag }} for Miyoo A30 (SpruceOS)
+          body: |
+            Automated A30 port of [MiyooPod ${{ steps.upstream.outputs.tag }}](https://github.com/danfragoso/miyoopod/releases/tag/${{ steps.upstream.outputs.tag }}) by danfragoso.
+
+            ## Installation
+            1. Extract `MiyooPod-A30-${{ steps.upstream.outputs.tag }}.zip` to `/mnt/SDCARD/App/` on your Miyoo A30
+            2. Launch MiyooPod from the PyUI menu
+
+            ## Requirements
+            - Miyoo A30
+            - SpruceOS v4.0.0+
+
+            ## What's changed for A30
+            - Direct framebuffer rendering with 90° CCW rotation (bypasses EGL rotation issue)
+            - ALSA volume control via `amixer` (replaces Miyoo Mini MI_AO device)
+            - Brightness control via `/sys/devices/virtual/disp/disp/attr/lcdbl`
+            - SDL2_mixer 2.6.3 (built from source for `Mix_MusicDuration` support)
+            - SDL2 with A30 video/joystick driver (from GMU)
+            - Proper SpruceOS launcher integration
+
+            ## Upstream
+            This build tracks [danfragoso/miyoopod](https://github.com/danfragoso/miyoopod) and rebuilds automatically when new versions are released.
+          files: MiyooPod-A30-${{ steps.upstream.outputs.tag }}.zip

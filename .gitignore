@@ -1,0 +1,4 @@
+upstream/
+*.zip
+*.log
+.DS_Store
