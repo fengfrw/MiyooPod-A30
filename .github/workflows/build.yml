@@ -93,16 +93,18 @@ jobs:
       - name: Set up CGO paths
         if: steps.check.outputs.needed == 'true'
         run: |
-          # main.go has hardcoded /root/include/SDL2 and /root/lib - create them world-readable
           sudo mkdir -p /root/include/SDL2 /root/lib
           sudo chmod 755 /root /root/include /root/include/SDL2 /root/lib
-          sudo cp /usr/include/SDL2/*.h /root/include/SDL2/
+          # Download armhf SDL2-dev deb to get armhf headers
+          curl -L "http://ports.ubuntu.com/ubuntu-ports/pool/main/libs/libsdl2/libsdl2-dev_2.30.0+dfsg-1_armhf.deb" -o /tmp/libsdl2-dev-armhf.deb
+          mkdir -p /tmp/sdl2-dev
+          cd /tmp/sdl2-dev && ar x /tmp/libsdl2-dev-armhf.deb && tar xf data.tar* 2>/dev/null || tar xf data.tar.xz 2>/dev/null || true
+          sudo cp /tmp/sdl2-dev/usr/include/SDL2/*.h /root/include/SDL2/
           sudo cp libs/libSDL2_mixer.so /root/lib/ 2>/dev/null || true
           sudo cp /usr/lib/arm-linux-gnueabihf/libSDL2*.so* /root/lib/ 2>/dev/null || true
-          MIXER_H=$(find / -name SDL_mixer.h 2>/dev/null | head -1)
-          if [ -n "$MIXER_H" ]; then
-            sudo cp "$MIXER_H" /root/include/SDL2/SDL_mixer.h
-          fi
+          # Copy SDL_mixer.h from our pre-built lib package if available
+          find /tmp/sdl2-dev -name "SDL_mixer.h" -exec sudo cp {} /root/include/SDL2/ \; 2>/dev/null || true
+          ls /root/include/SDL2/
 
       - name: Run build-inject
         if: steps.check.outputs.needed == 'true'
