@@ -79,19 +79,12 @@ jobs:
         if: steps.check.outputs.needed == 'true'
         run: |
           sudo dpkg --add-architecture armhf
-          # Replace all sources with explicit arch=amd64 to prevent armhf lookups on main mirrors
-          sudo python3 -c "
-import os, glob
-for f in ['/etc/apt/sources.list'] + glob.glob('/etc/apt/sources.list.d/*.list'):
-    try:
-        txt = open(f).read()
-        txt = txt.replace('deb http', 'deb [arch=amd64] http')
-        txt = txt.replace('deb [arch=amd64] [arch=amd64]', 'deb [arch=amd64]')
-        open(f,'w').write(txt)
-    except: pass
-"
-          # Add armhf ports mirror as separate file
-          printf 'deb [arch=armhf] http://ports.ubuntu.com/ubuntu-ports noble main universe\ndeb [arch=armhf] http://ports.ubuntu.com/ubuntu-ports noble-updates main universe\n' | sudo tee /etc/apt/sources.list.d/armhf-ports.list
+          # Restrict all existing sources to amd64 only
+          sudo grep -rl "^deb " /etc/apt/sources.list /etc/apt/sources.list.d/ 2>/dev/null |             xargs sudo sed -i 's|^deb \[|deb [arch=amd64 |;s|^deb http|deb [arch=amd64] http|' 2>/dev/null || true
+          # Add armhf ports mirror
+          printf 'deb [arch=armhf] http://ports.ubuntu.com/ubuntu-ports noble main universe\n' | sudo tee /etc/apt/sources.list.d/armhf-ports.list
+          printf 'deb [arch=armhf] http://ports.ubuntu.com/ubuntu-ports noble-updates main universe\n' | sudo tee -a /etc/apt/sources.list.d/armhf-ports.list
+          sudo apt-get update -o Dir::Etc::sourcelist=/etc/apt/sources.list.d/armhf-ports.list -o Dir::Etc::sourceparts=- -o APT::Get::List-Cleanup=0 || true
           sudo apt-get update
           sudo apt-get install -y gcc-arm-linux-gnueabihf libsdl2-dev:armhf libmpg123-dev:armhf libvorbis-dev:armhf
           sudo mkdir -p /root/include/SDL2 /root/lib
