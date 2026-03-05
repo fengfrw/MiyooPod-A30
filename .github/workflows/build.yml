@@ -75,36 +75,37 @@ jobs:
           cp ../libs/libSDL2_mixer-2.0.so.0 App/MiyooPod/libs/libSDL2_mixer-2.0.so.0
           echo "Patches applied"
 
-      - name: Install cross-compiler and SDL2 headers
+      - name: Install cross-compiler and armhf SDL2
         if: steps.check.outputs.needed == 'true'
         run: |
-          sudo apt-get install -y gcc-arm-linux-gnueabihf libsdl2-dev
-
-      - name: Get armhf SDL2 libs from ports
-        if: steps.check.outputs.needed == 'true'
-        run: |
-          mkdir -p /tmp/armhf-debs /tmp/armhf-libs
-          # Download armhf SDL2 runtime deb directly
-          curl -L "http://ports.ubuntu.com/ubuntu-ports/pool/main/libs/libsdl2/libsdl2-2.0-0_2.30.0+dfsg-1_armhf.deb" -o /tmp/armhf-debs/libsdl2.deb
-          # Extract just the .so files
-          cd /tmp/armhf-libs && ar x /tmp/armhf-debs/libsdl2.deb && tar xf data.tar* && find . -name "*.so*" | head -10
-          sudo cp /tmp/armhf-libs/usr/lib/arm-linux-gnueabihf/libSDL2*.so* /usr/lib/arm-linux-gnueabihf/ 2>/dev/null || true
+          sudo dpkg --add-architecture armhf
+          sudo apt-get update
+          sudo apt-get install -y gcc-arm-linux-gnueabihf libsdl2-dev:armhf libmpg123-dev:armhf libvorbis-dev:armhf
 
       - name: Set up CGO paths
         if: steps.check.outputs.needed == 'true'
         run: |
           sudo mkdir -p /root/include/SDL2 /root/lib
           sudo chmod 755 /root /root/include /root/include/SDL2 /root/lib
-          # Download armhf SDL2-dev deb to get armhf headers
-          curl -L "http://ports.ubuntu.com/ubuntu-ports/pool/main/libs/libsdl2/libsdl2-dev_2.30.0+dfsg-1_armhf.deb" -o /tmp/libsdl2-dev-armhf.deb
-          mkdir -p /tmp/sdl2-dev
-          cd /tmp/sdl2-dev && ar x /tmp/libsdl2-dev-armhf.deb && tar xf data.tar* 2>/dev/null || tar xf data.tar.xz 2>/dev/null || true
-          sudo cp /tmp/sdl2-dev/usr/include/SDL2/*.h /root/include/SDL2/
-          sudo cp libs/libSDL2_mixer.so /root/lib/ 2>/dev/null || true
+          sudo cp /usr/include/SDL2/*.h /root/include/SDL2/
           sudo cp /usr/lib/arm-linux-gnueabihf/libSDL2*.so* /root/lib/ 2>/dev/null || true
-          # Copy SDL_mixer.h from our pre-built lib package if available
-          find /tmp/sdl2-dev -name "SDL_mixer.h" -exec sudo cp {} /root/include/SDL2/ \; 2>/dev/null || true
-          ls /root/include/SDL2/
+          sudo cp /usr/lib/arm-linux-gnueabihf/libmpg123*.so* /root/lib/ 2>/dev/null || true
+          sudo cp /usr/lib/arm-linux-gnueabihf/libvorbis*.so* /root/lib/ 2>/dev/null || true
+          sudo cp libs/libSDL2_mixer.so /root/lib/
+          sudo cp libs/libSDL2_mixer-2.0.so.0 /root/lib/
+          ls /root/include/SDL2/ | head -5
+
+      - name: Copy SDL_mixer.h
+        if: steps.check.outputs.needed == 'true'
+        run: |
+          MIXER_H=$(find / -name SDL_mixer.h 2>/dev/null | head -1)
+          if [ -n "$MIXER_H" ]; then
+            sudo cp "$MIXER_H" /root/include/SDL2/SDL_mixer.h
+            echo "Copied SDL_mixer.h from $MIXER_H"
+          else
+            echo "ERROR: SDL_mixer.h not found"
+            exit 1
+          fi
 
       - name: Run build-inject
         if: steps.check.outputs.needed == 'true'
