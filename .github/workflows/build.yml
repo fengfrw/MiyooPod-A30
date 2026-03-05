@@ -91,7 +91,10 @@ jobs:
           sudo cp /tmp/armhf-extract/root/usr/include/SDL2/*.h /root/include/SDL2/ 2>/dev/null || true
           sudo cp /tmp/armhf-extract/root/usr/include/arm-linux-gnueabihf/SDL2/*.h /root/include/SDL2/ 2>/dev/null || true
           sudo find /tmp/armhf-extract/root -name "_real_SDL_config.h" -exec cp {} /root/include/SDL2/ \;
-          ls /root/include/SDL2/SDL_config* /root/include/SDL2/_real*
+          # SDL_config.h includes <SDL2/_real_SDL_config.h> but -I is /root/include/SDL2
+          # so compiler looks for /root/include/SDL2/SDL2/_real_SDL_config.h
+          sudo mkdir -p /root/include/SDL2/SDL2
+          sudo cp /tmp/armhf-extract/root/usr/include/arm-linux-gnueabihf/SDL2/_real_SDL_config.h /root/include/SDL2/SDL2/_real_SDL_config.h
           # Libs from extracted armhf debs
           sudo cp /usr/lib/arm-linux-gnueabihf/libSDL2*.so* /root/lib/ 2>/dev/null || true
           sudo cp /usr/lib/arm-linux-gnueabihf/libmpg123*.so* /root/lib/ 2>/dev/null || true
