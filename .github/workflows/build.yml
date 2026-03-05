@@ -80,7 +80,7 @@ jobs:
 
       - name: Run build-inject (native)
         if: steps.check.outputs.needed == 'true'
-        run: cd upstream && go run scripts/build-inject.go || true
+        run: cd upstream && /usr/local/go/bin/go run scripts/build-inject.go || true
 
       - name: Build MiyooPod binary
         if: steps.check.outputs.needed == 'true'
@@ -93,7 +93,7 @@ jobs:
             -e GOARM=7 \
             -e GOOS=linux \
             a30-cross \
-            sh -c 'go build -a -o App/MiyooPod/MiyooPod src/*.go'
+            sh -c '/usr/local/go/bin/go build -a -o App/MiyooPod/MiyooPod src/*.go'
 
       - name: Package release
         if: steps.check.outputs.needed == 'true'
