@@ -95,6 +95,8 @@ jobs:
         if: steps.check.outputs.needed == 'true'
         run: |
           cd upstream
+          CGO_CFLAGS="-I/usr/include/arm-linux-gnueabihf" \
+          CGO_LDFLAGS="-L/usr/lib/arm-linux-gnueabihf" \
           CC=arm-linux-gnueabihf-gcc \
           CGO_ENABLED=1 \
           GOARCH=arm \
