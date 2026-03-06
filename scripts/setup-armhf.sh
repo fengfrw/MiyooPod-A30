@@ -1,9 +1,9 @@
 #!/bin/bash
 set -e
 
-# Restrict existing sources to amd64 only (armhf not available on azure/security mirrors)
-sed -i 's/^deb http/deb [arch=amd64] http/g' /etc/apt/sources.list
-sed -i 's/^deb https/deb [arch=amd64] https/g' /etc/apt/sources.list
+# Restrict ALL existing apt sources to amd64 only
+find /etc/apt/sources.list /etc/apt/sources.list.d/ -name "*.list" | \
+    xargs sed -i 's/^deb \[/deb [arch=amd64 /g; s/^deb http/deb [arch=amd64] http/g; s/^deb https/deb [arch=amd64] https/g'
 
 # Add armhf architecture
 dpkg --add-architecture armhf
