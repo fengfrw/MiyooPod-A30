@@ -1,0 +1,7 @@
+{
+  "version": "0.1.0",
+  "checksum": "",
+  "url": "",
+  "size": 0,
+  "changelog": "A30 port: direct framebuffer rendering, ALSA audio, letter-skip navigation, seek-on-release, sleep/wake recovery."
+}
