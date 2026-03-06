@@ -10,7 +10,7 @@ import (
 
 // App metadata
 const (
-	APP_VERSION = "0.1.0"
+	APP_VERSION = "0.0.9"
 	APP_AUTHOR  = "Danilo Fragoso"
 	SUPPORT_URL = "https://github.com/danfragoso/miyoopod"
 )
@@ -676,6 +676,7 @@ type MiyooPod struct {
 	UpdateNotifications  bool            // Whether to show auto update popup on launch
 	VersionCheckDone     chan struct{}    // Closed when async version check completes
 	ShowingUpdatePrompt  bool            // True when update prompt overlay is visible
+	PendingUpdatePrompt  bool            // True when update prompt should be shown on next main loop tick
 
 	// Seek state (fast forward / rewind on Now Playing)
 	SeekHeld      bool      // Whether L/R is currently held down

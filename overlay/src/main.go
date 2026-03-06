@@ -271,7 +271,7 @@ func main() {
 	go func() {
 		<-app.VersionCheckDone
 		if app.UpdateAvailable && app.UpdateNotifications && app.Running {
-			app.showUpdatePrompt()
+			app.PendingUpdatePrompt = true
 		}
 	}()
 
@@ -313,6 +313,11 @@ func main() {
 
 		app.pollSeek()
 		app.pollMarquee()
+		// Show update prompt on main thread if flagged by background goroutine
+		if app.PendingUpdatePrompt {
+			app.PendingUpdatePrompt = false
+			app.showUpdatePrompt()
+		}
 		// Check if a background goroutine requested a redraw (non-blocking)
 		select {
 		case <-app.RedrawChan:
