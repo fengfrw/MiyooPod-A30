@@ -114,7 +114,7 @@ jobs:
         run: |
           cd upstream
           rm -f App/MiyooPod/miyoopod.log App/MiyooPod/config.json App/MiyooPod/.DS_Store
-          zip -r ../MiyooPod-A30-v${{ steps.version.outputs.ver }}.zip App/MiyooPod/
+          cd App/MiyooPod && zip -r ../../../MiyooPod-A30-v${{ steps.version.outputs.ver }}.zip . && cd ../..
           ls -lh ../MiyooPod-A30-v${{ steps.version.outputs.ver }}.zip
 
       - name: Create GitHub Release
