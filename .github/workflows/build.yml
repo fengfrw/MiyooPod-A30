@@ -76,6 +76,9 @@ jobs:
           echo 'cgo flags in main.go:'
           grep 'cgo' src/main.go | head -3
           cp ../overlay/App/MiyooPod/launch.sh App/MiyooPod/launch.sh
+          cp ../overlay/updater/main.go updater/main.go
+          cp ../overlay/updater/sdl.c updater/sdl.c
+          cp ../overlay/updater/sdl_decl.h updater/sdl_decl.h
           chmod +x App/MiyooPod/launch.sh
           cp ../libs/libSDL2_mixer.so App/MiyooPod/libs/libSDL2_mixer.so
           cp ../libs/libSDL2_mixer-2.0.so.0 App/MiyooPod/libs/libSDL2_mixer-2.0.so.0
