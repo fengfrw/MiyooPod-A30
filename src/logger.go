@@ -126,6 +126,8 @@ func DetectDevice(width, height C.int) {
 		// Both v4 and flip have the same resolution
 		// We'll label them as v4 by default, could be either
 		globalApp.DeviceModel = "miyoo-mini-v4"
+	} else if w == 480 && h == 640 {
+		globalApp.DeviceModel = "miyoo-a30"
 	} else {
 		globalApp.DeviceModel = fmt.Sprintf("unknown-%dx%d", w, h)
 	}

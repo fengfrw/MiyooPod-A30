@@ -10,14 +10,27 @@ func (app *MiyooPod) startPlaybackPoller() {
 	lastDrawnSecond := -1
 	tickCount := 0
 	saveTickCount := 0
+	lastWallTime := time.Now()
+	lastPosition := 0.0
 
 	for app.Running {
 		if app.Playing != nil && app.Playing.State != StateStopped {
 			state := audioGetState()
 
-			if state.Position >= 0 {
+			if state.Position >= 0 && !app.SeekActive {
 				app.Playing.Position = state.Position
 			}
+			// Detect post-sleep drift: position advancing faster than wall time
+			now := time.Now()
+			wallElapsed := now.Sub(lastWallTime).Seconds()
+			posElapsed := state.Position - lastPosition
+			if wallElapsed > 0.5 && posElapsed > wallElapsed*1.5 && state.IsPlaying {
+				logMsg("INFO: Audio drift detected (post-sleep), reinitializing audio")
+				audioReinit()
+				audioSetVolume(100)
+			}
+			lastWallTime = now
+			lastPosition = state.Position
 			if state.Duration > 0 && app.Playing.Track != nil && app.Playing.Track.Duration == 0 {
 				app.Playing.Track.Duration = state.Duration
 			}
@@ -81,7 +94,11 @@ func (app *MiyooPod) mpvLoadFile(path string) error {
 	if err != nil {
 		return err
 	}
-	return audioPlay()
+	err = audioPlay()
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func (app *MiyooPod) mpvTogglePause() {
@@ -90,6 +107,19 @@ func (app *MiyooPod) mpvTogglePause() {
 
 func (app *MiyooPod) mpvStop() {
 	audioStop()
+}
+
+func (app *MiyooPod) mpvSeekAbsolute(position float64) {
+	if app.Playing == nil {
+		return
+	}
+	if position < 0 {
+		position = 0
+	}
+	if position > app.Playing.Duration && app.Playing.Duration > 0 {
+		position = app.Playing.Duration
+	}
+	audioSeek(position)
 }
 
 func (app *MiyooPod) mpvSeek(seconds float64) {

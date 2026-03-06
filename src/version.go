@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-const VERSION_CHECK_URL = "https://github.com/danfragoso/miyoopod/raw/refs/heads/main/version.json"
+const VERSION_CHECK_URL = "https://github.com/amruthwo/MiyooPod-A30/raw/refs/heads/main/version.json"
 
 type VersionInfo struct {
 	Version   string `json:"version"`

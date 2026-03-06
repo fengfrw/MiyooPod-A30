@@ -28,6 +28,8 @@ func (app *MiyooPod) showAboutScreen() {
 
 	yPos += 30
 	dc.DrawStringAnchored("Created by: "+APP_AUTHOR, SCREEN_WIDTH/2, float64(yPos), 0.5, 0.5)
+	yPos += 20
+	dc.DrawStringAnchored("Ported to A30 by: amruthwo", SCREEN_WIDTH/2, float64(yPos), 0.5, 0.5)
 
 	yPos += 40
 	dc.SetFontFace(app.FontSmall)

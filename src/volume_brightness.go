@@ -7,24 +7,13 @@ import (
 
 // adjustVolume changes system volume and shows overlay
 func (app *MiyooPod) adjustVolume(delta int) {
-	newVolume := clamp(app.SystemVolume+delta, 0, 100)
-
-	// Always max SDL2_mixer volume
-	audioSetVolume(100)
-
-	// Set MI_AO system volume
-	setMiAOVolume(newVolume)
-	app.SystemVolume = newVolume
-
-	app.showOverlay("volume", newVolume)
-
-	// Persist to settings
-	go app.saveSettings()
-
-	logMsg(fmt.Sprintf("Volume: %d%%", newVolume))
+        // Volume is owned by SpruceOS kernel - just read ALSA and show overlay
+        audioSetVolume(100) // Keep SDL_mixer internal level maxed
+        if vol := getAlsaVolume(); vol >= 0 {
+                app.SystemVolume = vol
+        }
+        app.showOverlay("volume", app.SystemVolume)
 }
-
-// adjustBrightness changes screen brightness and shows overlay
 func (app *MiyooPod) adjustBrightness(delta int) {
 	newBrightness := clamp(app.SystemBrightness+delta, 10, 100) // Min 10% so screen stays visible
 

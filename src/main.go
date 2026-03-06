@@ -324,6 +324,7 @@ func main() {
 
 	// Save playback state before exit
 	app.savePlaybackState()
+	app.saveSettings()
 
 	// Track app closed
 	TrackAppLifecycle("app_closed", nil)
@@ -689,6 +690,10 @@ type AudioStateSnapshot struct {
 
 func audioFlushBuffers() {
 	C.audio_flush_buffers()
+}
+
+func audioReinit() {
+	C.audio_reinit()
 }
 
 func audioGetState() AudioStateSnapshot {

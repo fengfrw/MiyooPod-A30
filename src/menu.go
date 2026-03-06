@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"unicode"
 	"sort"
 
 	"github.com/fogleman/gg"
@@ -461,6 +462,54 @@ func (app *MiyooPod) handleMenuKey(key Key) {
 					"menu_depth": len(app.MenuStack),
 					"action":     "back",
 				})
+			}
+		}
+	case R2:
+		// Skip to next letter in list
+		if len(current.Items) == 0 {
+			break
+		}
+		curLabel := []rune(current.Items[current.SelIndex].Label)
+		curLetter := unicode.ToUpper(curLabel[0])
+		for i := current.SelIndex + 1; i < len(current.Items); i++ {
+			label := []rune(current.Items[i].Label)
+			if len(label) > 0 && unicode.ToUpper(label[0]) != curLetter {
+				current.SelIndex = i
+				current.adjustScroll()
+				break
+			}
+		}
+	case L2:
+		// Skip to previous letter in list
+		if len(current.Items) == 0 {
+			break
+		}
+		curLabel := []rune(current.Items[current.SelIndex].Label)
+		curLetter := unicode.ToUpper(curLabel[0])
+		// Find start of current letter group
+		groupStart := current.SelIndex
+		for groupStart > 0 {
+			label := []rune(current.Items[groupStart-1].Label)
+			if len(label) > 0 && unicode.ToUpper(label[0]) != curLetter {
+				break
+			}
+			groupStart--
+		}
+		// Go to previous letter group
+		if groupStart > 0 {
+			prevLabel := []rune(current.Items[groupStart-1].Label)
+			prevLetter := unicode.ToUpper(prevLabel[0])
+			for i := groupStart - 1; i >= 0; i-- {
+				label := []rune(current.Items[i].Label)
+				if len(label) > 0 && unicode.ToUpper(label[0]) != prevLetter {
+					current.SelIndex = i + 1
+					current.adjustScroll()
+					break
+				}
+				if i == 0 {
+					current.SelIndex = 0
+					current.adjustScroll()
+				}
 			}
 		}
 	case MENU:

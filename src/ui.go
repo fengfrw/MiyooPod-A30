@@ -953,16 +953,16 @@ func (app *MiyooPod) drawLockOverlay() {
 	dc.SetFontFace(app.FontSmall)
 	dc.SetHexColor("#CCCCCC")
 	lockKeyName := app.getLockKeyName()
-	dc.DrawStringAnchored(fmt.Sprintf("Press POWER or double-press %s to unlock", lockKeyName), centerX, centerY+15, 0.5, 0.5)
+	dc.DrawStringAnchored(fmt.Sprintf("Double-press %s to unlock", lockKeyName), centerX, centerY+15, 0.5, 0.5)
 
 	// Force quit hint
 	dc.SetHexColor("#999999")
-	dc.DrawStringAnchored("Hold POWER for 5s to force quit", centerX, centerY+40, 0.5, 0.5)
+	dc.DrawStringAnchored("Press START+SELECT to exit", centerX, centerY+40, 0.5, 0.5)
 }
 
 // getBrightness reads the current PWM duty_cycle (brightness level)
 func getBrightness() int {
-	data, err := os.ReadFile("/sys/class/pwm/pwmchip0/pwm0/duty_cycle")
+	data, err := os.ReadFile("/sys/devices/virtual/disp/disp/attr/lcdbl")
 	if err != nil {
 		return -1
 	}
@@ -982,7 +982,7 @@ func setBrightness(level int) {
 	if level > 100 {
 		level = 100
 	}
-	os.WriteFile("/sys/class/pwm/pwmchip0/pwm0/duty_cycle", []byte(fmt.Sprintf("%d", level)), 0644)
+	os.WriteFile("/sys/devices/virtual/disp/disp/attr/lcdbl", []byte(fmt.Sprintf("%d", level*255/100)), 0644)
 }
 
 // drawVolumeOrBrightnessOverlay draws Mac-style overlay for volume/brightness

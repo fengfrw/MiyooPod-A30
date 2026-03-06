@@ -119,10 +119,10 @@ func (app *MiyooPod) loadSettings() error {
 	}
 
 	// Restore volume (default 50 if not set)
-	if settings.Volume != nil {
-		app.SystemVolume = *settings.Volume
-		setMiAOVolume(app.SystemVolume)
-		logMsg(fmt.Sprintf("INFO: Restored volume: %d%%", app.SystemVolume))
+	audioSetVolume(100) // Keep SDL_mixer maxed; SpruceOS owns ALSA
+	if vol := getAlsaVolume(); vol >= 0 {
+		app.SystemVolume = vol
+		logMsg(fmt.Sprintf("INFO: Current volume from ALSA: %d%%", vol))
 	}
 
 	// Restore brightness (default to current if not set)
@@ -146,7 +146,6 @@ func (app *MiyooPod) saveSettings() error {
 		AutoLockMinutes:     &app.AutoLockMinutes,
 		ScreenPeekEnabled:   &app.ScreenPeekEnabled,
 		UpdateNotifications: &app.UpdateNotifications,
-		Volume:              &app.SystemVolume,
 		Brightness:          &app.SystemBrightness,
 	}
 

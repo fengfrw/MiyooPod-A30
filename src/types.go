@@ -10,7 +10,7 @@ import (
 
 // App metadata
 const (
-	APP_VERSION = "0.0.6"
+	APP_VERSION = "0.1.0"
 	APP_AUTHOR  = "Danilo Fragoso"
 	SUPPORT_URL = "https://github.com/danfragoso/miyoopod"
 )
@@ -620,7 +620,7 @@ type MiyooPod struct {
 	ScreenPeekTimer      *time.Timer // Timer to dim screen after peek
 
 	// Volume/Brightness state
-	SystemVolume   int         // MI_AO hardware volume (0-100), persisted across launches
+	SystemVolume   int         // Current ALSA volume (0-100), read from SpruceOS for overlay display
 	SystemBrightness int       // PWM brightness (0-100), persisted across launches
 
 	// Volume/Brightness overlay
@@ -681,6 +681,7 @@ type MiyooPod struct {
 	SeekHeld      bool      // Whether L/R is currently held down
 	SeekActive    bool      // Whether seeking has activated (past hold threshold)
 	SeekDirection int       // -1 for rewind, +1 for fast forward
+	SeekPreviewPos float64  // Preview position during seek hold
 	SeekStartTime time.Time // When the key was first pressed
 	LastSeekTick  time.Time // When the last seek tick was performed
 

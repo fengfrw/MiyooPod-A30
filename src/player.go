@@ -81,10 +81,17 @@ func (app *MiyooPod) playCurrentQueueTrack() {
 		return
 	}
 
-	// Verify playback actually started
-	time.Sleep(100 * time.Millisecond)
-	state := audioGetState()
-	if !state.IsPlaying && !state.IsPaused {
+	// Verify playback actually started - retry up to 500ms for slow ALSA init
+	started := false
+	for i := 0; i < 5; i++ {
+		time.Sleep(100 * time.Millisecond)
+		st := audioGetState()
+		if st.IsPlaying || st.IsPaused {
+			started = true
+			break
+		}
+	}
+	if !started {
 		logMsg("ERROR: Audio failed to start playing")
 		app.Playing.State = StateStopped
 		app.Playing.Track = nil

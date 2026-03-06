@@ -25,6 +25,8 @@ int audio_init() {
         return -1;
     }
     c_log("Mix_OpenAudio OK");
+    // Set hardware DAC volume - Mix_OpenAudio resets it to 0 on A30
+    system("amixer sset \"digital volume\" 63 > /dev/null 2>&1");
 
     int flags = MIX_INIT_MP3 | MIX_INIT_FLAC | MIX_INIT_OGG;
     int initted = Mix_Init(flags);
@@ -99,7 +101,9 @@ int audio_load_mem(void *data, int size) {
 int audio_play() {
     if (!current_music) return -1;
     music_finished_flag = 0;
-    return Mix_PlayMusic(current_music, 0);
+    int ret = Mix_PlayMusic(current_music, 0);
+    Mix_VolumeMusic(MIX_MAX_VOLUME);
+    return ret;
 }
 
 void audio_pause() {
@@ -162,7 +166,20 @@ double audio_get_file_duration(const char *path) {
 
 int audio_seek(double position) {
     if (!current_music) return -1;
-    return Mix_SetMusicPosition(position);
+    if (position < 0) position = 0;
+    if (cached_duration > 0 && position > cached_duration) position = cached_duration;
+
+    int was_paused = Mix_PausedMusic();
+    Mix_HaltMusic();
+    music_finished_flag = 0;
+    if (Mix_PlayMusic(current_music, 0) < 0) return -1;
+    Mix_VolumeMusic(MIX_MAX_VOLUME); // restore after PlayMusic resets volume
+    if (position > 0.1) {
+        Mix_SetMusicPosition(position);
+    }
+    if (was_paused) Mix_PauseMusic();
+
+    return 0;
 }
 
 void audio_set_volume(int volume) {
@@ -210,6 +227,35 @@ void audio_get_state(AudioState *state) {
         music_finished_flag = 0;
         state->finished = 1;
     }
+}
+
+// Reinitialize audio device after suspend/resume.
+// Closes and reopens SDL_mixer, then reloads the current track from memory if available.
+int audio_reinit() {
+    double saved_pos = 0.0;
+    if (current_music && Mix_PlayingMusic()) {
+        saved_pos = Mix_GetMusicPosition(current_music);
+    }
+    Mix_HaltMusic();
+    Mix_CloseAudio();
+    if (Mix_OpenAudio(44100, MIX_DEFAULT_FORMAT, 2, 524288) < 0) {
+        c_logf("audio_reinit: Mix_OpenAudio failed: %s", SDL_GetError());
+        return -1;
+    }
+    Mix_Init(MIX_INIT_MP3 | MIX_INIT_FLAC | MIX_INIT_OGG);
+    Mix_HookMusicFinished(on_music_finished);
+    music_finished_flag = 0;
+    // Reload and seek if we have music
+    if (current_music) {
+        if (Mix_PlayMusic(current_music, 0) == 0) {
+            Mix_VolumeMusic(MIX_MAX_VOLUME);
+            if (saved_pos > 0.5) {
+                Mix_SetMusicPosition(saved_pos);
+            }
+        }
+    }
+    c_log("audio_reinit OK");
+    return 0;
 }
 
 void audio_quit() {
