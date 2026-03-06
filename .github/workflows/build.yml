@@ -83,26 +83,9 @@ jobs:
       - name: Set up CGO paths
         if: steps.check.outputs.needed == 'true'
         run: |
-          sudo mkdir -p /root/include/SDL2 /root/lib
-          sudo chmod 755 /root /root/include /root/include/SDL2 /root/lib
-          # Debug: show all extracted headers
-          find /tmp/armhf-extract/root -name "*.h" | sort
-          # Copy all SDL2 headers from all locations
-          sudo cp /tmp/armhf-extract/root/usr/include/SDL2/*.h /root/include/SDL2/ 2>/dev/null || true
-          sudo cp /tmp/armhf-extract/root/usr/include/arm-linux-gnueabihf/SDL2/*.h /root/include/SDL2/ 2>/dev/null || true
-          sudo find /tmp/armhf-extract/root -name "_real_SDL_config.h" -exec cp {} /root/include/SDL2/ \;
-          # SDL_config.h includes <SDL2/_real_SDL_config.h> but -I is /root/include/SDL2
-          # so compiler looks for /root/include/SDL2/SDL2/_real_SDL_config.h
-          sudo mkdir -p /root/include/SDL2/SDL2
-          sudo cp /tmp/armhf-extract/root/usr/include/arm-linux-gnueabihf/SDL2/_real_SDL_config.h /root/include/SDL2/SDL2/_real_SDL_config.h
-          # Libs from extracted armhf debs
-          sudo cp /usr/lib/arm-linux-gnueabihf/libSDL2*.so* /root/lib/ 2>/dev/null || true
-          sudo cp /usr/lib/arm-linux-gnueabihf/libmpg123*.so* /root/lib/ 2>/dev/null || true
-          sudo cp /usr/lib/arm-linux-gnueabihf/libvorbis*.so* /root/lib/ 2>/dev/null || true
-          sudo cp libs/libSDL2_mixer.so /root/lib/
-          sudo cp libs/libSDL2_mixer-2.0.so.0 /root/lib/
-          ls /root/include/SDL2/ | head -5
-          ls /root/lib/libSDL2* | head -5
+          # SDL2 installed via apt - verify headers and libs are present
+          find /usr/include/arm-linux-gnueabihf/SDL2 -name "SDL_mixer.h" 2>/dev/null || find /usr/include -name "SDL_mixer.h" 2>/dev/null
+          ls /usr/lib/arm-linux-gnueabihf/libSDL2* 2>/dev/null | head -5
 
       - name: Run build-inject
         if: steps.check.outputs.needed == 'true'
