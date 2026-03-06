@@ -96,18 +96,19 @@ jobs:
         if: steps.check.outputs.needed == 'true'
         run: cd upstream && go run scripts/build-inject.go || true
 
+      - name: Build Docker image
+        if: steps.check.outputs.needed == 'true'
+        run: docker build -f Dockerfile.a30 -t a30-cross .
       - name: Build MiyooPod binary
         if: steps.check.outputs.needed == 'true'
         run: |
-          cd upstream
-          CGO_CFLAGS="-I/usr/include/arm-linux-gnueabihf" \
-          CGO_LDFLAGS="-L/tmp/sdl-libs -L/usr/lib/arm-linux-gnueabihf -Wl,-rpath-link,/tmp/sdl-libs" \
-          CC=arm-linux-gnueabihf-gcc \
-          CGO_ENABLED=1 \
-          GOARCH=arm \
-          GOARM=7 \
-          GOOS=linux \
-          go build -a -o App/MiyooPod/MiyooPod src/*.go
+          docker run --rm -v ${{ github.workspace }}/upstream:/build \
+            -e CC=arm-linux-gnueabihf-gcc \
+            -e CGO_ENABLED=1 -e GOARCH=arm -e GOARM=7 -e GOOS=linux \
+            -e CGO_CFLAGS="-I/usr/include/arm-linux-gnueabihf" \
+            -e CGO_LDFLAGS="-L/tmp/sdl-libs -L/usr/lib/arm-linux-gnueabihf -Wl,-rpath-link,/tmp/sdl-libs" \
+            a30-cross sh -c \
+            "mkdir -p /tmp/sdl-libs && cp /build/App/MiyooPod/libs/libSDL2_mixer*.so* /tmp/sdl-libs/ && cd /build && go build -a -o App/MiyooPod/MiyooPod src/*.go"
 
       - name: Package release
         if: steps.check.outputs.needed == 'true'
