@@ -8,4 +8,8 @@ RUN apt-get update && apt-get install -y \
     libsdl2-mixer-dev:armhf \
     && rm -rf /var/lib/apt/lists/*
 
+# Symlink armhf SDL headers to standard include path for CGO
+RUN ln -sf /usr/include/arm-linux-gnueabihf/SDL2 /usr/include/SDL2 || true
+RUN find /usr -name "SDL_mixer.h" 2>/dev/null
+
 WORKDIR /build
