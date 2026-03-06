@@ -51,12 +51,12 @@ jobs:
         if: steps.check.outputs.needed == 'true'
         run: git clone --depth 1 https://github.com/danfragoso/miyoopod.git upstream
 
-      - name: Get upstream version string
+      - name: Get version string
         if: steps.check.outputs.needed == 'true'
         id: version
         run: |
-          VER=$(grep -r "version" upstream/src/posthog.go 2>/dev/null | grep -o '"[0-9]*\.[0-9]*\.[0-9]*"' | tr -d '"' | head -1)
-          if [ -z "$VER" ]; then VER="0.0.0"; fi
+          VER=$(cat version.json | grep -o '"version": *"[^"]*"' | grep -o '[0-9]*\.[0-9]*\.[0-9]*')
+          if [ -z "$VER" ]; then VER="0.1.0"; fi
           echo "ver=$VER" >> $GITHUB_OUTPUT
           echo "Version: $VER"
 
