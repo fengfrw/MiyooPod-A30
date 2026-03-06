@@ -33,12 +33,16 @@ jobs:
       - name: Check if build needed
         id: check
         run: |
-          if [ "${{ steps.upstream.outputs.commit }}" = "${{ steps.last_built.outputs.commit }}" ]; then
+          OUR_VER=$(cat version.json | grep -o '"version": *"[^"]*"' | grep -o '[0-9]*\.[0-9]*\.[0-9]*')
+          LAST_TAG=$(curl -s https://api.github.com/repos/${{ github.repository }}/releases/latest | jq -r '.tag_name' || echo "none")
+          SAME_COMMIT="${{ steps.upstream.outputs.commit }}" = "${{ steps.last_built.outputs.commit }}"
+          SAME_VER=$(echo "$LAST_TAG" | grep -c "v${OUR_VER}-" || true)
+          if [ "${{ steps.upstream.outputs.commit }}" = "${{ steps.last_built.outputs.commit }}" ] && [ "$SAME_VER" -gt "0" ]; then
             echo "needed=false" >> $GITHUB_OUTPUT
             echo "Already up to date"
           else
             echo "needed=true" >> $GITHUB_OUTPUT
-            echo "New commit, building"
+            echo "New commit or version bump, building"
           fi
 
       - name: Set up Go
