@@ -190,7 +190,7 @@ func (app *MiyooPod) launchUpdater() {
 	sdlCleanup()
 
 	// Exec the updater binary (replaces this process)
-	updaterPath := "./updater"
+	updaterPath := "./updater_new"
 	err = syscall.Exec(updaterPath, []string{updaterPath}, os.Environ())
 	if err != nil {
 		logMsg(fmt.Sprintf("ERROR: Failed to exec updater: %v", err))

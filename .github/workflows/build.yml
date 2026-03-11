@@ -1,0 +1,58 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+
+      - name: Install ARM cross-compiler
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-arm-linux-gnueabihf
+
+      - name: Inject PostHog token
+        run: |
+          echo "POSTHOG_TOKEN=${{ secrets.POSTHOG_TOKEN }}" > .env
+          go run scripts/build-inject.go
+
+      - name: Build ARM binary
+        env:
+          CC: arm-linux-gnueabihf-gcc
+          CGO_ENABLED: "1"
+          GOARCH: arm
+          GOARM: "7"
+          GOOS: linux
+          CGO_CFLAGS: "-I/usr/include/arm-linux-gnueabihf"
+          CGO_LDFLAGS: "-L${{ github.workspace }}/App/MiyooPod/libs -Wl,-rpath-link,${{ github.workspace }}/App/MiyooPod/libs"
+        run: |
+          go build -a -o App/MiyooPod/MiyooPod ./src/*.go
+
+      - name: Get version
+        id: version
+        run: echo "VERSION=${GITHUB_REF_NAME}" >> $GITHUB_OUTPUT
+
+      - name: Package release zip
+        run: |
+          cd App
+          zip -r ../MiyooPod-${{ steps.version.outputs.VERSION }}.zip MiyooPod/
+          cd ..
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: MiyooPod ${{ steps.version.outputs.VERSION }}
+          files: MiyooPod-${{ steps.version.outputs.VERSION }}.zip
+          generate_release_notes: true

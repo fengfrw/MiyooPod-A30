@@ -7,18 +7,29 @@ import (
 
 // adjustVolume changes system volume and shows overlay
 func (app *MiyooPod) adjustVolume(delta int) {
-        // Volume is owned by SpruceOS kernel - just read ALSA and show overlay
-        audioSetVolume(100) // Keep SDL_mixer internal level maxed
-        if vol := getAlsaVolume(); vol >= 0 {
-                app.SystemVolume = vol
-        }
-        app.showOverlay("volume", app.SystemVolume)
+	newVolume := clamp(app.SystemVolume+delta, 0, 100)
+	setAlsaVolume(newVolume)
+	// Read back what ALSA actually set in case SpruceOS's daemon also incremented
+	// on the same event, causing our tracked value to drift from reality.
+	if actual := getAlsaVolume(); actual >= 0 {
+		app.SystemVolume = actual
+	} else {
+		app.SystemVolume = newVolume
+	}
+	app.showOverlay("volume", app.SystemVolume)
+	logMsg(fmt.Sprintf("Volume: %d%%", app.SystemVolume))
 }
 func (app *MiyooPod) adjustBrightness(delta int) {
 	newBrightness := clamp(app.SystemBrightness+delta, 10, 100) // Min 10% so screen stays visible
 
 	setBrightness(newBrightness)
 	app.SystemBrightness = newBrightness
+
+	// Re-sync volume: SpruceOS may also handle the SELECT+VOLUME combo as a plain
+	// volume event, causing ALSA to change as a side effect of brightness presses.
+	if actual := getAlsaVolume(); actual >= 0 {
+		app.SystemVolume = actual
+	}
 
 	app.showOverlay("brightness", newBrightness)
 

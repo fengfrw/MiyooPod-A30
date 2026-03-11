@@ -10,7 +10,7 @@ import (
 
 // App metadata
 const (
-	APP_VERSION = "0.1.0"
+	APP_VERSION = "0.1.5"
 	APP_AUTHOR  = "Danilo Fragoso"
 	SUPPORT_URL = "https://github.com/danfragoso/miyoopod"
 )
@@ -676,14 +676,27 @@ type MiyooPod struct {
 	UpdateNotifications  bool            // Whether to show auto update popup on launch
 	VersionCheckDone     chan struct{}    // Closed when async version check completes
 	ShowingUpdatePrompt  bool            // True when update prompt overlay is visible
+	PendingUpdatePrompt  bool            // True when update prompt should be shown on next main loop tick
+
+	// Joystick
+	JoystickChan    chan Key      // Directional keys from analog stick → main event loop
+
+	// Favorites
+	Favorites       []string     // Paths of favorited tracks
+	FavoritesMenu   *MenuScreen  // Reference to favorites menu screen (to invalidate on change)
+	FavToastVisible bool         // Whether fav toast is currently shown
+	FavToastAdded   bool         // true = added, false = removed
+	FavToastTimer   *time.Timer  // Timer to auto-hide fav toast
 
 	// Seek state (fast forward / rewind on Now Playing)
-	SeekHeld      bool      // Whether L/R is currently held down
-	SeekActive    bool      // Whether seeking has activated (past hold threshold)
-	SeekDirection int       // -1 for rewind, +1 for fast forward
-	SeekPreviewPos float64  // Preview position during seek hold
-	SeekStartTime time.Time // When the key was first pressed
-	LastSeekTick  time.Time // When the last seek tick was performed
+	SeekHeld       bool      // Whether L/R is currently held down
+	SeekActive     bool      // Whether seeking has activated (past hold threshold)
+	SeekDirection  int       // -1 for rewind, +1 for fast forward
+	SeekPreviewPos float64   // Preview position during seek hold
+	SeekStartTime  time.Time // When the key was first pressed
+	LastSeekTick   time.Time // When the last seek tick was performed
+	SeekLoading        bool    // True while audio_seek C call is blocking (show toast)
+	RestoreSeekTarget  float64 // Non-zero: seek here on first Play after session restore
 
 	// Header marquee state (now playing text scrolling)
 	MarqueeOffset     float64      // Current pixel offset for scrolling

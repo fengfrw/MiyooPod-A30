@@ -35,6 +35,21 @@ func (app *MiyooPod) buildRootMenu() *MenuScreen {
 		})
 	}
 
+	// Favorites
+	favMenu := &MenuScreen{
+		Title:  "Favorites",
+		Parent: root,
+		Builder: func() []*MenuItem {
+			return app.buildFavoritesMenuItems()
+		},
+	}
+	app.FavoritesMenu = favMenu
+	items = append(items, &MenuItem{
+		Label:      "Favorites",
+		HasSubmenu: true,
+		Submenu:    favMenu,
+	})
+
 	// Artists
 	if len(app.Library.Artists) > 0 {
 		artistMenu := &MenuScreen{

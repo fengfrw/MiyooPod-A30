@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"time"
 )
 
 const PLAYBACK_STATE_PATH = "/mnt/SDCARD/Media/Music/.miyoopod_playback.json"
@@ -175,25 +174,9 @@ func (app *MiyooPod) restorePlaybackState() {
 
 	logMsg(fmt.Sprintf("INFO: Restored playback state - %s at %.1fs (paused)", track.Title, ps.Position))
 
-	// Seek to saved position in background — audio backend needs time to be ready
+	// Defer the seek to when the user presses Play — avoids blocking background CPU on restore.
+	// The UI shows the saved position immediately; seek happens on demand with a "Seeking..." toast.
 	if ps.Position > 0 {
-		seekTarget := ps.Position
-		go func() {
-			for attempt := 0; attempt < 10; attempt++ {
-				time.Sleep(100 * time.Millisecond)
-				audioSeek(seekTarget)
-
-				time.Sleep(50 * time.Millisecond)
-				state := audioGetState()
-				if state.Position > 0 && state.Duration > 0 {
-					app.Playing.Position = state.Position
-					app.Playing.Duration = state.Duration
-					app.NPCacheDirty = true
-					app.requestRedraw()
-					return
-				}
-			}
-			logMsg(fmt.Sprintf("WARNING: Could not verify seek to %.1fs for %s", seekTarget, track.Title))
-		}()
+		app.RestoreSeekTarget = ps.Position
 	}
 }

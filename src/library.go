@@ -186,8 +186,11 @@ func (app *MiyooPod) scanTrack(path string) {
 		logMsg(fmt.Sprintf("[SCAN] Tag read error: %s | Error: %v", filepath.Base(path), err))
 	}
 
-	// Extract duration using SDL_mixer
+	// Extract duration using SDL_mixer, fall back to file-header parsing for MP3
 	track.Duration = audioGetDurationForFile(path)
+	if track.Duration == 0 && strings.ToLower(filepath.Ext(path)) == ".mp3" {
+		track.Duration = mp3Duration(path)
+	}
 	if track.Duration == 0 {
 		logMsg(fmt.Sprintf("[SCAN] Warning: Could not extract duration for: %s", filepath.Base(path)))
 	}
@@ -783,6 +786,140 @@ func (app *MiyooPod) loadLibraryJSON() error {
 		len(lib.Tracks), len(lib.Albums), len(lib.Artists), len(lib.Playlists), time.Since(start)))
 
 	return nil
+}
+
+// mp3Duration computes the duration of an MP3 file by parsing its frame header.
+// Uses the XING/INFO header (VBR frame count) when present, otherwise estimates
+// from CBR bitrate × file size. Returns 0 if parsing fails.
+// This is a fallback for when SDL2_mixer/mpg123 cannot report Mix_MusicDuration.
+func mp3Duration(path string) float64 {
+	f, err := os.Open(path)
+	if err != nil {
+		return 0
+	}
+	defer f.Close()
+
+	info, err := os.Stat(path)
+	if err != nil {
+		return 0
+	}
+	fileSize := info.Size()
+
+	// Read the first 10 bytes to detect and measure an ID3v2 tag.
+	// We only peek here so we can seek past arbitrarily large tags (e.g. embedded
+	// album art > 1 MB) without reading them into memory.
+	peek := make([]byte, 10)
+	peekN, _ := f.Read(peek)
+
+	mpegStart := int64(0)
+	if peekN >= 10 && peek[0] == 'I' && peek[1] == 'D' && peek[2] == '3' {
+		// Synchsafe integer: 7 bits per byte (MSB always 0), big-endian.
+		id3Sz := int64(peek[6]&0x7F)<<21 | int64(peek[7]&0x7F)<<14 |
+			int64(peek[8]&0x7F)<<7 | int64(peek[9]&0x7F)
+		mpegStart = 10 + id3Sz
+		if mpegStart >= fileSize {
+			return 0
+		}
+		if _, err := f.Seek(mpegStart, 0); err != nil {
+			return 0
+		}
+	} else {
+		f.Seek(0, 0) // no ID3 tag — restart from the beginning
+	}
+
+	// Read 64 KB of MPEG data from the frame start.
+	// This is enough to capture the frame header and any XING/INFO VBR block.
+	buf := make([]byte, 65536)
+	n, _ := f.Read(buf)
+	buf = buf[:n]
+
+	// Bytes available for audio (used by the CBR fallback).
+	audioBytes := fileSize - mpegStart
+
+	// MPEG Layer 3 bitrate table [mpeg_version][bitrate_index] in kbps.
+	// Rows: 0=MPEG2.5, 1=reserved, 2=MPEG2, 3=MPEG1
+	bitrateTbl := [4][16]int{
+		{0, 32, 48, 56, 64, 80, 96, 112, 128, 144, 160, 176, 192, 224, 256, 0},
+		{},
+		{0, 8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160, 0},
+		{0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320, 0},
+	}
+	sampleRateTbl := [4][4]int{
+		{11025, 12000, 8000, 0},
+		{},
+		{22050, 24000, 16000, 0},
+		{44100, 48000, 32000, 0},
+	}
+
+	for i := 0; i < len(buf)-3; i++ {
+		if buf[i] != 0xFF || (buf[i+1]&0xE0) != 0xE0 {
+			continue
+		}
+		mpegVer := (buf[i+1] >> 3) & 0x3
+		layer := (buf[i+1] >> 1) & 0x3 // 01 = Layer III (MP3)
+		if layer != 1 {
+			continue
+		}
+		bitrateIdx := (buf[i+2] >> 4) & 0xF
+		srIdx := (buf[i+2] >> 2) & 0x3
+		if bitrateIdx == 0 || bitrateIdx == 15 || srIdx == 3 {
+			continue
+		}
+		bitrate := bitrateTbl[mpegVer][bitrateIdx]
+		sampleRate := sampleRateTbl[mpegVer][srIdx]
+		if bitrate == 0 || sampleRate == 0 {
+			continue
+		}
+
+		// Channel mode is in byte 3, bits 7-6: 0b11 = mono.
+		isMono := (buf[i+3] >> 6) == 3
+
+		// XING/INFO VBR header sits immediately after the side-information block.
+		// Side-info sizes (bytes after the 4-byte frame header):
+		//   MPEG1 stereo: 32   MPEG1 mono: 17
+		//   MPEG2 stereo: 17   MPEG2 mono:  9
+		var sideInfoBytes int
+		if mpegVer == 3 { // MPEG1
+			if isMono {
+				sideInfoBytes = 17
+			} else {
+				sideInfoBytes = 32
+			}
+		} else { // MPEG2 / MPEG2.5
+			if isMono {
+				sideInfoBytes = 9
+			} else {
+				sideInfoBytes = 17
+			}
+		}
+		xOff := i + 4 + sideInfoBytes
+
+		if xOff+12 <= len(buf) {
+			tag := string(buf[xOff : xOff+4])
+			if tag == "Xing" || tag == "Info" {
+				flags := uint32(buf[xOff+4])<<24 | uint32(buf[xOff+5])<<16 |
+					uint32(buf[xOff+6])<<8 | uint32(buf[xOff+7])
+				if flags&1 != 0 { // bit 0 = frame count field present
+					frameCount := uint32(buf[xOff+8])<<24 | uint32(buf[xOff+9])<<16 |
+						uint32(buf[xOff+10])<<8 | uint32(buf[xOff+11])
+					samplesPerFrame := 1152 // MPEG1 Layer III
+					if mpegVer != 3 {
+						samplesPerFrame = 576
+					}
+					if frameCount > 0 {
+						return float64(frameCount) * float64(samplesPerFrame) / float64(sampleRate)
+					}
+				}
+			}
+		}
+
+		// CBR fallback: estimate from audio byte count and nominal bitrate.
+		if audioBytes > 0 {
+			return float64(audioBytes) * 8.0 / float64(bitrate*1000)
+		}
+		return 0
+	}
+	return 0
 }
 
 // readSampleRate parses the sample rate directly from the audio file header.

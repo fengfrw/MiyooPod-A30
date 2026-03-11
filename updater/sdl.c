@@ -5,7 +5,7 @@
 #include <unistd.h>
 #include <sys/ioctl.h>
 #include <linux/fb.h>
-#include <SDL.h>
+#include <SDL2/SDL.h>
 
 const int UPDATER_RENDER_WIDTH = 640;
 const int UPDATER_RENDER_HEIGHT = 480;

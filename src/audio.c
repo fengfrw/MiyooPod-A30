@@ -1,14 +1,16 @@
-#include "SDL.h"
-#include "SDL_mixer.h"
+#include <SDL2/SDL.h>
+#include <SDL2/SDL_mixer.h>
 #include <stdlib.h>
 #include <string.h>
 
 static Mix_Music *current_music = NULL;
 static volatile int music_finished_flag = 0;
+static int current_volume = MIX_MAX_VOLUME;
 static double cached_duration = 0.0;
 
 // Memory buffer for current track - eliminates SD card I/O during playback
 static void *current_music_data = NULL;
+static int current_music_size = 0;
 
 static void on_music_finished() {
     music_finished_flag = 1;
@@ -18,9 +20,8 @@ int audio_init() {
     c_log("audio_init entered");
 
     c_log("calling Mix_OpenAudio...");
-    // Increased buffer to 524288 (512KB) to handle high-bitrate files (>9MB)
-    // Live albums and 320kbps MP3s need larger buffer to prevent SD card read starvation
-    if (Mix_OpenAudio(44100, MIX_DEFAULT_FORMAT, 2, 524288) < 0) {
+    // 16384 samples (~1.5s latency) - small enough for fast seek, large enough to prevent underruns on ARM
+    if (Mix_OpenAudio(44100, MIX_DEFAULT_FORMAT, 2, 16384) < 0) {
         c_logf("Mix_OpenAudio failed: %s", SDL_GetError());
         return -1;
     }
@@ -59,6 +60,7 @@ int audio_load(const char *path) {
     }
 
     cached_duration = Mix_MusicDuration(current_music);
+    { char _dbuf[64]; snprintf(_dbuf, sizeof(_dbuf), "%.2f", cached_duration); c_logf("audio_load OK, duration=", _dbuf); }
     return 0;
 }
 
@@ -76,6 +78,7 @@ int audio_load_mem(void *data, int size) {
     }
 
     current_music_data = data;
+    current_music_size = size;
 
     SDL_RWops *rw = SDL_RWFromMem(current_music_data, size);
     if (!rw) {
@@ -94,7 +97,7 @@ int audio_load_mem(void *data, int size) {
     }
 
     cached_duration = Mix_MusicDuration(current_music);
-    c_log("audio_load_mem OK (playing from RAM)");
+    { char _dbuf[64]; snprintf(_dbuf, sizeof(_dbuf), "%.2f", cached_duration); c_logf("audio_load_mem OK, duration=", _dbuf); }
     return 0;
 }
 
@@ -102,7 +105,7 @@ int audio_play() {
     if (!current_music) return -1;
     music_finished_flag = 0;
     int ret = Mix_PlayMusic(current_music, 0);
-    Mix_VolumeMusic(MIX_MAX_VOLUME);
+    Mix_VolumeMusic(current_volume);
     return ret;
 }
 
@@ -137,7 +140,7 @@ int audio_is_paused() {
 }
 
 double audio_get_position() {
-    if (!current_music || !Mix_PlayingMusic()) return 0.0;
+    if (!current_music || (!Mix_PlayingMusic() && !Mix_PausedMusic())) return 0.0;
     return Mix_GetMusicPosition(current_music);
 }
 
@@ -166,23 +169,64 @@ double audio_get_file_duration(const char *path) {
 
 int audio_seek(double position) {
     if (!current_music) return -1;
+    if (!Mix_PlayingMusic() && !Mix_PausedMusic()) return -1;
     if (position < 0) position = 0;
     if (cached_duration > 0 && position > cached_duration) position = cached_duration;
 
     int was_paused = Mix_PausedMusic();
-    Mix_HaltMusic();
-    music_finished_flag = 0;
-    if (Mix_PlayMusic(current_music, 0) < 0) return -1;
-    Mix_VolumeMusic(MIX_MAX_VOLUME); // restore after PlayMusic resets volume
-    if (position > 0.1) {
-        Mix_SetMusicPosition(position);
-    }
-    if (was_paused) Mix_PauseMusic();
 
+    // Flush the ALSA hardware ring buffer by closing and reopening the audio device.
+    // Without this, up to ~2s of pre-seek audio drains from ALSA before the seeked
+    // audio is heard. Un-hook first to suppress the spurious music_finished event.
+    Mix_HookMusicFinished(NULL);
+    Mix_HaltMusic();
+    Mix_CloseAudio();
+    if (Mix_OpenAudio(44100, MIX_DEFAULT_FORMAT, 2, 16384) < 0) {
+        Mix_HookMusicFinished(on_music_finished);
+        return -1;
+    }
+    Mix_HookMusicFinished(on_music_finished);
+    music_finished_flag = 0;
+
+    // Reload music from the in-memory buffer so mpg123 gets a fresh handle
+    // initialized at the correct sample rate (reusing the old handle after
+    // CloseAudio causes mpg123 to use a wrong rate, producing 5x position error).
+    if (current_music_data && current_music_size > 0) {
+        Mix_FreeMusic(current_music);
+        current_music = NULL;
+        SDL_RWops *rw = SDL_RWFromMem(current_music_data, current_music_size);
+        if (rw) {
+            current_music = Mix_LoadMUS_RW(rw, 1);
+        }
+        if (!current_music) {
+            return -1;
+        }
+    }
+
+    // PlayMusic first: mpg123 requires at least one decode callback cycle before
+    // Mix_SetMusicPosition will work correctly. Mute to suppress pos-0 audio.
+    // SDL_Delay(200) yields the CPU so the audio thread runs at least once before
+    // we pause - on A30's slow ARM scheduler PauseMusic can otherwise be called
+    // before the callback ever runs, leaving mpg123 cold and causing seeks from
+    // near-0 positions to land at the wrong frame.
+    Mix_VolumeMusic(0);
+    if (Mix_PlayMusic(current_music, 0) < 0) return -1;
+    SDL_Delay(200);
+    Mix_PauseMusic();
+    SDL_LockAudio();
+    SDL_UnlockAudio();
+
+    Mix_SetMusicPosition(position);
+    Mix_VolumeMusic(current_volume);
+
+    if (!was_paused) {
+        Mix_ResumeMusic();
+    }
     return 0;
 }
 
 void audio_set_volume(int volume) {
+    current_volume = volume;
     Mix_VolumeMusic(volume);
 }
 
@@ -238,7 +282,7 @@ int audio_reinit() {
     }
     Mix_HaltMusic();
     Mix_CloseAudio();
-    if (Mix_OpenAudio(44100, MIX_DEFAULT_FORMAT, 2, 524288) < 0) {
+    if (Mix_OpenAudio(44100, MIX_DEFAULT_FORMAT, 2, 16384) < 0) {
         c_logf("audio_reinit: Mix_OpenAudio failed: %s", SDL_GetError());
         return -1;
     }
@@ -248,7 +292,7 @@ int audio_reinit() {
     // Reload and seek if we have music
     if (current_music) {
         if (Mix_PlayMusic(current_music, 0) == 0) {
-            Mix_VolumeMusic(MIX_MAX_VOLUME);
+            Mix_VolumeMusic(current_volume);
             if (saved_pos > 0.5) {
                 Mix_SetMusicPosition(saved_pos);
             }

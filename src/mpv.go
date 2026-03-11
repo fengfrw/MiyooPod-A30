@@ -13,26 +13,81 @@ func (app *MiyooPod) startPlaybackPoller() {
 	lastWallTime := time.Now()
 	lastPosition := 0.0
 
+	// Software clock for backends that don't report position (e.g., MP3/mpg123 on A30).
+	// Tracks "position = clockBasePos at wall time clockBase".
+	var clockBase time.Time    // Wall time at which position == clockBasePos
+	var clockBasePos float64   // Position value anchored at clockBase
+	var clockLastTrack *Track  // Track for which clock was last initialized
+	var wasPaused bool         // Whether state was paused on the last tick
+	var pauseStartWall time.Time // Wall time when pause began
+	prevSeekActive := false    // Previous SeekActive value, to detect seek completion
+
 	for app.Running {
 		if app.Playing != nil && app.Playing.State != StateStopped {
 			state := audioGetState()
 
-			if state.Position >= 0 && !app.SeekActive {
-				app.Playing.Position = state.Position
+			// Reset clock when a new track starts.
+			if app.Playing.Track != clockLastTrack {
+				clockLastTrack = app.Playing.Track
+				clockBase = time.Now()
+				clockBasePos = 0
+				wasPaused = false
 			}
-			// Detect post-sleep drift: position advancing faster than wall time
+
+			// Seek just completed: re-anchor clock to the position the seek landed on.
+			if prevSeekActive && !app.SeekActive {
+				clockBase = time.Now()
+				clockBasePos = app.Playing.Position
+				wasPaused = state.IsPaused
+				if wasPaused {
+					pauseStartWall = time.Now()
+				}
+			}
+			prevSeekActive = app.SeekActive
+
+			// Only trust backend position if it's strictly positive and actually advancing.
+			// Mix_GetMusicPosition returns 0.0 (stuck) or -1.0 for MP3/mpg123 on A30.
+			positionAdvancing := state.Position > 0 && state.Position != lastPosition
+			if positionAdvancing && !app.SeekActive {
+				app.Playing.Position = state.Position
+				// Keep software clock anchored to real position when available.
+				clockBase = time.Now()
+				clockBasePos = state.Position
+			} else if !app.SeekActive && !clockBase.IsZero() {
+				// Backend doesn't report position (returns -1): use wall-clock estimate.
+				if state.IsPlaying {
+					if wasPaused {
+						// Resumed: shift clock base forward by the paused duration.
+						clockBase = clockBase.Add(time.Since(pauseStartWall))
+						wasPaused = false
+					}
+					pos := clockBasePos + time.Since(clockBase).Seconds()
+					if app.Playing.Duration > 0 && pos > app.Playing.Duration {
+						pos = app.Playing.Duration
+					}
+					app.Playing.Position = pos
+				} else if state.IsPaused && !wasPaused {
+					wasPaused = true
+					pauseStartWall = time.Now()
+				}
+			}
+
+			// Detect post-sleep drift: position advancing faster than wall time.
 			now := time.Now()
 			wallElapsed := now.Sub(lastWallTime).Seconds()
 			posElapsed := state.Position - lastPosition
 			if wallElapsed > 0.5 && posElapsed > wallElapsed*1.5 && state.IsPlaying {
 				logMsg("INFO: Audio drift detected (post-sleep), reinitializing audio")
 				audioReinit()
-				audioSetVolume(100)
 			}
 			lastWallTime = now
 			lastPosition = state.Position
 			if state.Duration > 0 && app.Playing.Track != nil && app.Playing.Track.Duration == 0 {
 				app.Playing.Track.Duration = state.Duration
+			}
+			// Sync Playing.Duration from track (Mix_MusicDuration unreliable)
+			if app.Playing.Duration == 0 && app.Playing.Track != nil && app.Playing.Track.Duration > 0 {
+				app.Playing.Duration = app.Playing.Track.Duration
 			}
 
 			if state.IsPaused && app.Playing.State != StatePaused {
@@ -76,9 +131,9 @@ func (app *MiyooPod) startPlaybackPoller() {
 				tickCount = 0
 			}
 
-			// Save playback state every 3 seconds during active playback
+			// Save playback state every 60 seconds during active playback
 			saveTickCount++
-			if saveTickCount >= 3 {
+			if saveTickCount >= 60 {
 				app.savePlaybackState()
 				saveTickCount = 0
 			}
@@ -89,14 +144,23 @@ func (app *MiyooPod) startPlaybackPoller() {
 }
 
 func (app *MiyooPod) mpvLoadFile(path string) error {
-	// Stream from SD card with larger buffer (128KB) to reduce underruns
-	err := audioLoadFile(path)
+	// Load file into RAM to eliminate SD card I/O during playback and seek
+	err := audioLoadFileToMemory(path)
 	if err != nil {
-		return err
+		// Fallback to streaming if memory load fails (e.g. very large file, low RAM)
+		logMsg("WARN: memory load failed, falling back to streaming: " + err.Error())
+		err = audioLoadFile(path)
+		if err != nil {
+			return err
+		}
 	}
 	err = audioPlay()
 	if err != nil {
 		return err
+	}
+	// Mix_MusicDuration unreliable for some formats - use track duration from library scan
+	if app.Playing != nil && app.Playing.Track != nil && app.Playing.Track.Duration > 0 {
+		app.Playing.Duration = app.Playing.Track.Duration
 	}
 	return nil
 }

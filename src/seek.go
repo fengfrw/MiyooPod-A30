@@ -41,15 +41,25 @@ func (app *MiyooPod) seekKeyReleased() int {
 	wasActive := app.SeekActive
 	previewPos := app.SeekPreviewPos
 	app.SeekHeld = false
-	app.SeekActive = false
 	app.SeekDirection = 0
 	app.SeekStartTime = time.Time{}
 	app.LastSeekTick = time.Time{}
 	if wasActive {
+		app.RestoreSeekTarget = 0 // manual seek overrides any deferred restore seek
 		app.Playing.Position = previewPos
+		app.SeekLoading = true
+		app.drawSeekToast()
+		app.triggerRefresh()
 		app.mpvSeekAbsolute(previewPos)
+		// Set SeekActive false AFTER seek completes so the wall-clock re-anchor in
+		// startPlaybackPoller fires at the correct time (when audio actually starts),
+		// not partway through the seek scan where it races ahead of the audio.
+		app.SeekActive = false
+		app.SeekLoading = false
+		app.requestRedraw()
 		return 0
 	}
+	app.SeekActive = false
 	return direction
 }
 

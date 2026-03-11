@@ -709,6 +709,8 @@ func (app *MiyooPod) drawStatusBar() {
 		app.drawButtonLegend(400, centerY, "→", "Queue")
 		if app.Playing != nil && app.Playing.Track != nil && app.Playing.Track.Lyrics != "" {
 			app.drawButtonLegend(510, centerY, "START", "Lyrics")
+		} else {
+			app.drawButtonLegend(510, centerY, "↑", "Fav.")
 		}
 	case ScreenQueue:
 		app.drawButtonLegend(12, centerY, "B", "Back")
@@ -983,6 +985,45 @@ func setBrightness(level int) {
 		level = 100
 	}
 	os.WriteFile("/sys/devices/virtual/disp/disp/attr/lcdbl", []byte(fmt.Sprintf("%d", level*255/100)), 0644)
+}
+
+// drawSeekToast draws a small centered pill saying "Seeking..." while audio_seek is blocking.
+// Must be called before the blocking C seek call; the RunUI goroutine flushes it to screen.
+func (app *MiyooPod) drawSeekToast() {
+	dc := app.DC
+	pillW := 220.0
+	pillH := 52.0
+	pillX := (SCREEN_WIDTH - pillW) / 2
+	pillY := float64(SCREEN_HEIGHT)/2 - pillH/2
+
+	dc.SetRGBA(0.08, 0.08, 0.08, 0.88)
+	dc.DrawRoundedRectangle(pillX, pillY, pillW, pillH, 14)
+	dc.Fill()
+
+	dc.SetFontFace(app.FontMenu)
+	dc.SetRGBA(1, 1, 1, 1)
+	dc.DrawStringAnchored("Seeking...", float64(SCREEN_WIDTH)/2, float64(SCREEN_HEIGHT)/2, 0.5, 0.5)
+}
+
+// drawFavToast draws a toast pill confirming a favorite was added or removed.
+func (app *MiyooPod) drawFavToast() {
+	dc := app.DC
+	text := "★ Favorited"
+	if !app.FavToastAdded {
+		text = "★ Unfavorited"
+	}
+	pillW := 220.0
+	pillH := 52.0
+	pillX := (SCREEN_WIDTH - pillW) / 2
+	pillY := float64(SCREEN_HEIGHT)/2 - pillH/2
+
+	dc.SetRGBA(0.08, 0.08, 0.08, 0.88)
+	dc.DrawRoundedRectangle(pillX, pillY, pillW, pillH, 14)
+	dc.Fill()
+
+	dc.SetFontFace(app.FontMenu)
+	dc.SetRGBA(1, 1, 1, 1)
+	dc.DrawStringAnchored(text, float64(SCREEN_WIDTH)/2, float64(SCREEN_HEIGHT)/2, 0.5, 0.5)
 }
 
 // drawVolumeOrBrightnessOverlay draws Mac-style overlay for volume/brightness

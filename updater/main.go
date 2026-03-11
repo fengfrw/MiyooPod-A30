@@ -1,10 +1,10 @@
 package main
 
 /*
-#cgo CFLAGS: -I/root/include/SDL2 -O2 -w -D_GNU_SOURCE=1 -D_REENTRANT
-#cgo LDFLAGS: -L/root/lib -Wl,-rpath-link,/root/lib -Wl,-rpath,'$ORIGIN' -Wl,--unresolved-symbols=ignore-in-shared-libs -lSDL2 -lpthread
+#cgo CFLAGS: -I/usr/include/arm-linux-gnueabihf -I/usr/include/arm-linux-gnueabihf/SDL2 -O2 -w -D_GNU_SOURCE=1 -D_REENTRANT
+#cgo LDFLAGS: -L/tmp/sdl-libs -L/usr/lib/arm-linux-gnueabihf -Wl,-rpath-link,/tmp/sdl-libs -Wl,-rpath-link,/usr/lib/arm-linux-gnueabihf -Wl,-rpath,'$ORIGIN' -Wl,--unresolved-symbols=ignore-in-shared-libs -lSDL2 -lpthread
 #include <stdlib.h>
-#include "sdl.c"
+#include "sdl_decl.h"
 */
 import "C"
 
@@ -513,9 +513,11 @@ func downloadToFile(dlURL string, destPath string, expectedSize int64, onProgres
 
 	// Try wget first (busybox wget on Miyoo Mini), fall back to curl.
 	// --no-check-certificate is needed because the device has no CA bundle for HTTPS.
-	cmd := exec.Command("wget", "--no-check-certificate", "-q", "-O", tmpPath, dlURL)
+	cmd := exec.Command("/mnt/SDCARD/spruce/bin/wget", "-q", "-O", tmpPath, dlURL)
+	cmd.Env = append(os.Environ(), "LD_LIBRARY_PATH=/mnt/SDCARD/spruce/a30/lib:"+os.Getenv("LD_LIBRARY_PATH"))
 	cmd.Stdout = nil
-	cmd.Stderr = nil
+	logFile, _ := os.OpenFile("/mnt/SDCARD/App/MiyooPod/updater.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	cmd.Stderr = logFile
 
 	if err := cmd.Start(); err != nil {
 		// wget not available, try curl (-k to skip cert verification)
@@ -599,13 +601,16 @@ func extractZip(zipPath string, destDir string) error {
 	buf := make([]byte, 64*1024) // Reuse a single 64KB buffer for all entries
 
 	for _, f := range r.File {
-		// The zip contains a MiyooPod/ directory prefix - strip it
 		name := f.Name
 		parts := strings.SplitN(name, "/", 2)
-		if len(parts) < 2 || parts[1] == "" {
-			continue // Skip the root directory entry
+		var relPath string
+		if len(parts) == 2 && parts[1] != "" {
+			relPath = parts[1]
+		} else if len(parts) == 1 && parts[0] != "" && f.FileInfo().Mode().IsRegular() {
+			relPath = parts[0]
+		} else {
+			continue
 		}
-		relPath := parts[1]
 
 		targetPath := filepath.Join(destDir, relPath)
 

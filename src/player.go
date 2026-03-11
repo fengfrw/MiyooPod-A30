@@ -21,6 +21,9 @@ func (app *MiyooPod) playTrackFromList(tracks []*Track, startIdx int) {
 
 	if app.Queue.Shuffle {
 		app.buildShuffleOrder(startIdx)
+		// buildShuffleOrder places startIdx at ShuffleOrder[0]; CurrentIndex must point
+		// into ShuffleOrder (not into Tracks directly) so reset it to 0.
+		app.Queue.CurrentIndex = 0
 	} else {
 		// Clear old shuffle order when playing without shuffle
 		app.Queue.ShuffleOrder = nil
@@ -62,6 +65,7 @@ func (app *MiyooPod) playCurrentQueueTrack() {
 	// Track song play for analytics
 	TrackSongPlayed(track)
 
+	app.RestoreSeekTarget = 0 // clear any deferred restore seek — user chose a new track
 	app.Playing.Track = track
 	app.Playing.State = StatePlaying
 	app.Playing.Position = 0
@@ -69,7 +73,14 @@ func (app *MiyooPod) playCurrentQueueTrack() {
 	if track.Duration > 0 {
 		app.Playing.Duration = track.Duration
 	} else {
-		app.Playing.Duration = 0
+		// SDL2_mixer/mpg123 backend may not support Mix_MusicDuration on this device.
+		// Parse the file header directly so duration is available before the first tick.
+		if d := mp3Duration(track.Path); d > 0 {
+			track.Duration = d // cache so subsequent plays don't re-parse
+			app.Playing.Duration = d
+		} else {
+			app.Playing.Duration = 0
+		}
 	}
 
 	err := app.mpvLoadFile(track.Path)
@@ -134,6 +145,19 @@ func (app *MiyooPod) getCurrentTrack() *Track {
 func (app *MiyooPod) togglePlayPause() {
 	if app.Playing == nil || app.Playing.State == StateStopped {
 		return
+	}
+	// On first Play after session restore, seek to the saved position before resuming.
+	// SeekActive is set so the poller re-anchors its software clock after the seek completes.
+	if app.RestoreSeekTarget > 0 && app.Playing.State == StatePaused {
+		target := app.RestoreSeekTarget
+		app.RestoreSeekTarget = 0
+		app.SeekActive = true
+		app.SeekLoading = true
+		app.drawSeekToast()
+		app.triggerRefresh()
+		app.mpvSeekAbsolute(target)
+		app.SeekLoading = false
+		app.SeekActive = false
 	}
 	app.mpvTogglePause()
 	app.NPCacheDirty = true
@@ -375,8 +399,8 @@ func (app *MiyooPod) updateProgressBarOnly() {
 		return
 	}
 
-	// Don't draw progress bar over lock or volume/brightness overlay
-	if app.Locked || app.OverlayVisible {
+	// Don't draw progress bar over lock, volume/brightness overlay, or seek toast
+	if app.Locked || app.OverlayVisible || app.SeekLoading {
 		return
 	}
 

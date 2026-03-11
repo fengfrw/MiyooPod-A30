@@ -1,8 +1,8 @@
 package main
 
 /*
-#cgo CFLAGS: -I/root/include/SDL2 -O2 -w -D_GNU_SOURCE=1 -D_REENTRANT
-#cgo LDFLAGS: -L/root/lib -Wl,-rpath-link,/root/lib -Wl,-rpath,'$ORIGIN' -Wl,--unresolved-symbols=ignore-in-shared-libs -lSDL2 -lSDL2_mixer -lpthread
+#cgo CFLAGS: -I/usr/include/arm-linux-gnueabihf -I/usr/include/arm-linux-gnueabihf/SDL2 -O2 -w -D_GNU_SOURCE=1 -D_REENTRANT
+#cgo LDFLAGS: -L/usr/lib/arm-linux-gnueabihf -Wl,-rpath-link,/usr/lib/arm-linux-gnueabihf -Wl,-rpath,'$ORIGIN' -Wl,--unresolved-symbols=ignore-in-shared-libs -lSDL2 -lSDL2_mixer -lpthread
 #include <stdlib.h>
 #include "main.c"
 #include "audio.c"
@@ -75,6 +75,7 @@ func (app *MiyooPod) Init() {
 	app.TextMeasureCache = make(map[string]float64)
 	app.RefreshChan = make(chan struct{}, 1)
 	app.RedrawChan = make(chan struct{}, 1)
+	app.JoystickChan = make(chan Key, 4)
 	app.LockKey = Y // Default lock key
 
 	// Power management defaults
@@ -97,6 +98,9 @@ func (app *MiyooPod) Init() {
 	if err := app.loadSettings(); err != nil {
 		logMsg(fmt.Sprintf("WARNING: Could not load settings: %v (using defaults)", err))
 	}
+
+	// Load favorites
+	app.loadFavorites()
 
 	// Draw splash screen with logo (now using restored theme if available)
 	app.drawLogoSplash()
@@ -203,7 +207,11 @@ func main() {
 	app := createApp()
 	app.Init()
 
-	go app.RunUI()
+	runUIDone := make(chan struct{})
+	go func() {
+		app.RunUI()
+		close(runUIDone)
+	}()
 	time.Sleep(100 * time.Millisecond)
 
 	// Load library from JSON or perform full scan
@@ -271,7 +279,7 @@ func main() {
 	go func() {
 		<-app.VersionCheckDone
 		if app.UpdateAvailable && app.UpdateNotifications && app.Running {
-			app.showUpdatePrompt()
+			app.PendingUpdatePrompt = true
 		}
 	}()
 
@@ -313,6 +321,22 @@ func main() {
 
 		app.pollSeek()
 		app.pollMarquee()
+		// Show update prompt on main thread if flagged by background goroutine
+		if app.PendingUpdatePrompt {
+			app.PendingUpdatePrompt = false
+			app.showUpdatePrompt()
+		}
+		// Drain joystick key events from analog stick goroutine
+		for {
+			select {
+			case jkey := <-app.JoystickChan:
+				app.handleKey(jkey)
+			default:
+				goto doneJoystick
+			}
+		}
+	doneJoystick:
+
 		// Check if a background goroutine requested a redraw (non-blocking)
 		select {
 		case <-app.RedrawChan:
@@ -322,15 +346,27 @@ func main() {
 		time.Sleep(33 * time.Millisecond) // ~30Hz polling, main thread sleeps most of the time
 	}
 
-	// Save playback state before exit
-	app.savePlaybackState()
-	app.saveSettings()
+	// Save playback state before exit (timeout to avoid hanging on read-only fs)
+	saveDone := make(chan struct{})
+	go func() {
+		app.savePlaybackState()
+		app.saveSettings()
+		close(saveDone)
+	}()
+	select {
+	case <-saveDone:
+	case <-time.After(2 * time.Second):
+		logMsg("WARNING: Save timed out on exit")
+	}
 
 	// Track app closed
 	TrackAppLifecycle("app_closed", nil)
 
-	// Cleanup: close refresh channel to unblock RunUI goroutine
+	// Unblock and wait for RunUI goroutine to finish before tearing down SDL.
+	// Closing RefreshChan signals RunUI to exit; <-runUIDone ensures it has finished
+	// any in-progress C.refreshScreenPtr call before fb_mem is munmapped by sdlCleanup.
 	close(app.RefreshChan)
+	<-runUIDone
 
 	sdlCleanup()
 }
@@ -523,6 +559,10 @@ func (app *MiyooPod) handleNowPlayingKey(key Key) {
 		// Cycle repeat mode
 		app.cycleRepeat()
 		app.drawCurrentScreen()
+	case UP:
+		// Toggle favorite
+		app.toggleFavorite()
+		app.drawCurrentScreen()
 	case START:
 		// Open lyrics screen if lyrics are available
 		if app.Playing != nil && app.Playing.Track != nil && app.Playing.Track.Lyrics != "" {
@@ -562,6 +602,11 @@ func (app *MiyooPod) drawCurrentScreen() {
 	// Draw volume/brightness overlay if visible
 	if app.OverlayVisible {
 		app.drawVolumeOrBrightnessOverlay()
+	}
+
+	// Draw fav toast if visible
+	if app.FavToastVisible {
+		app.drawFavToast()
 	}
 
 	// Draw error popup overlay if active
