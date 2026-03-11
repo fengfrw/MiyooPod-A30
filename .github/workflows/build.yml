@@ -60,18 +60,13 @@ jobs:
           CHECKSUM="sha256:$(sha256sum ${ZIP} | cut -d' ' -f1)"
           SIZE=$(stat -c%s ${ZIP})
           URL="https://github.com/amruthwo/MiyooPod-A30/releases/download/${VERSION}/${ZIP}"
-          python3 -c "
-import json
-with open('version.json') as f:
-    v = json.load(f)
-v['version'] = '${VERSION_NUM}'
-v['checksum'] = '${CHECKSUM}'
-v['url'] = '${URL}'
-v['size'] = ${SIZE}
-with open('version.json', 'w') as f:
-    json.dump(v, f, indent=4)
-    f.write('\n')
-"
+          jq --arg version "$VERSION_NUM" \
+             --arg checksum "$CHECKSUM" \
+             --arg url "$URL" \
+             --argjson size "$SIZE" \
+             '.version=$version | .checksum=$checksum | .url=$url | .size=$size' \
+             version.json > version.json.tmp
+          mv version.json.tmp version.json
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add version.json
