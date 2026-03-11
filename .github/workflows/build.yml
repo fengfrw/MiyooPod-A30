@@ -16,29 +16,30 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.21'
-
-      - name: Install ARM cross-compiler and SDL2 headers
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y gcc-arm-linux-gnueabihf libsdl2-dev libsdl2-mixer-dev
+          go-version: '1.22'
 
       - name: Inject PostHog token
         run: |
           echo "POSTHOG_TOKEN=${{ secrets.POSTHOG_TOKEN }}" > .env
           go run scripts/build-inject.go
 
+      - name: Build Docker image
+        run: docker build -f Dockerfile.build -t miyoopod-builder .
+
       - name: Build ARM binary
-        env:
-          CC: arm-linux-gnueabihf-gcc
-          CGO_ENABLED: "1"
-          GOARCH: arm
-          GOARM: "7"
-          GOOS: linux
-          CGO_CFLAGS: "-I/usr/include -I/usr/include/arm-linux-gnueabihf"
-          CGO_LDFLAGS: "-L${{ github.workspace }}/App/MiyooPod/libs -Wl,-rpath-link,${{ github.workspace }}/App/MiyooPod/libs"
         run: |
-          go build -a -o App/MiyooPod/MiyooPod ./src/*.go
+          docker run --rm \
+            -v ${{ github.workspace }}:/build \
+            -w /build \
+            -e CC=arm-linux-gnueabihf-gcc \
+            -e CGO_ENABLED=1 \
+            -e GOARCH=arm \
+            -e GOARM=7 \
+            -e GOOS=linux \
+            -e CGO_CFLAGS="-I/usr/include/arm-linux-gnueabihf" \
+            -e CGO_LDFLAGS="-L/build/App/MiyooPod/libs -Wl,-rpath-link,/build/App/MiyooPod/libs" \
+            miyoopod-builder \
+            go build -buildvcs=false -a -o App/MiyooPod/MiyooPod ./src/*.go
 
       - name: Get version
         id: version
@@ -46,9 +47,8 @@ jobs:
 
       - name: Package release zip
         run: |
-          cd App
-          zip -r ../MiyooPod-${{ steps.version.outputs.VERSION }}.zip MiyooPod/
-          cd ..
+          cd App/MiyooPod
+          zip -r ../../MiyooPod-${{ steps.version.outputs.VERSION }}.zip .
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
