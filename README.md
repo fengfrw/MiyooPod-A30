@@ -1,227 +1,148 @@
-# MiyooPod
+# MiyooPod A30
 
-MP3 player for the Miyoo Mini Plus, Mini v4, and Mini Flip running OnionOS. Inspired by the classic iPod interface.
+iPod-inspired music player for the **Miyoo A30** running SpruceOS.
 
-![MiyooPod](screenshots/hero.png)
+![MiyooPod on the Miyoo A30](screenshots/A30.jpg)
+
+A port of [MiyooPod](https://github.com/danfragoso/miyoopod) by danfragoso, rebuilt for the A30's hardware and SpruceOS environment.
 
 ## Features
 
-- iPod-inspired user interface with multiple themes
+- iPod-inspired interface with 17 customizable themes
 - Browse by Artists, Albums, and Songs
-- Search/filter lists with on-screen A-Z keyboard
-- Album art display with automatic fetching from MusicBrainz
+- Search/filter with on-screen A-Z keyboard
+- Album art — embedded ID3 tags or auto-fetched from MusicBrainz
 - Shuffle and repeat modes
-- Seek/fast-forward/rewind with accelerating speed
-- Over-the-air updates
-- Session persistence (queue, position, shuffle/repeat restored on launch)
-- Native 640×480 resolution optimized for Miyoo Mini
-- 17 customizable themes (Classic iPod, Dark Blue, Nord, Cyberpunk, and more)
-- MP3, FLAC, and OGG/Vorbis playback
+- Seek with accelerating hold speed
 - Lyrics display with LRC timed sync and auto-scroll
+- Volume and brightness control
+- Screen lock via power button
+- Session persistence — queue, position, and shuffle/repeat restored on launch
+- Over-the-air updates
+- Native 640×480 rendering
 
 ## Installation
 
-1. Download [MiyooPod.zip](https://github.com/danfragoso/miyoopod/raw/refs/heads/main/releases/MiyooPod.zip)
-2. Extract the MiyooPod.zip file
-3. Connect your Miyoo Mini Plus SD card to your computer
-4. Copy the `MiyooPod` folder to `/App` on your SD card
-5. Safely eject the SD card and insert it back into your Miyoo Mini Plus
-6. MiyooPod will appear in your Apps menu
+1. Download the latest `MiyooPod-v*.zip` from [Releases](https://github.com/amruthwo/MiyooPod-A30/releases)
+2. Extract the zip — you'll get a `MiyooPod/` folder
+3. Copy the `MiyooPod/` folder to `/App` on your A30's SD card
+4. Eject and reinsert the SD card — MiyooPod will appear in the Apps menu
 
-## Adding Songs
+To reinstall or update manually, repeat the same steps and overwrite the existing folder. Your music library, settings, and artwork are stored separately and won't be affected.
 
-MiyooPod reads music files from your SD card's Music folder:
+## Adding Music
+
+MiyooPod scans for music in:
 
 ```
 /mnt/SDCARD/Media/Music/
 ```
 
-1. Connect your Miyoo Mini SD card to your computer
-2. Navigate to `/Media/Music/` folder
-3. Copy your MP3 files and folders into this directory
-4. Organize your music by artist/album folders for better library organization
-5. Launch MiyooPod - it will automatically scan and index your music library
+Copy your music files there, organized into artist/album folders if you like. MiyooPod will scan and index them automatically on launch.
 
 ## Supported Formats
 
-MiyooPod supports **MP3**, **FLAC**, and **OGG/Vorbis** audio files.
+**MP3**, **FLAC**, and **OGG/Vorbis**
 
-**Recommended Format:** MP3 @ 256kbps
+MP3 at 256kbps CBR or VBR V0 is recommended for best performance on the A30's ARM hardware.
 
-- **Format:** MP3 (MPEG-1 Audio Layer 3)
-- **Bitrate:** 256kbps CBR (Constant Bitrate) or VBR V0
-- **Sample Rate:** 44.1kHz
-- **Channels:** Stereo
+## Controls
 
-> **Note:** The Miyoo Mini Plus audio output is not high quality enough to justify higher bitrate files. Playback might be choppy with higher bitrate files. FLAC files are supported but MP3 is recommended for best performance on the Miyoo Mini's limited hardware.
-
-## Album Artwork
-
-### Embedded Artwork
-MiyooPod automatically extracts album art embedded in your MP3 files' ID3 tags.
-
-### Automatic Download from MusicBrainz
-For albums without embedded artwork, MiyooPod can automatically fetch album covers:
-
-1. Navigate to **Settings** from the main menu
-2. Select **"Fetch Album Art"**
-3. MiyooPod will scan your library and download missing album artwork
-
-> **Note:** Requires internet connection via WiFi. Artwork is stored in `/mnt/SDCARD/Media/Music/.miyoopod_artwork/`
+| Button | Action |
+|--------|--------|
+| Joystick / D-Pad | Navigate menus |
+| A | Select / confirm |
+| B | Back |
+| L / R | Seek backward / forward (hold to accelerate) |
+| Volume Up / Down | Adjust volume |
+| SELECT + Volume Up / Down | Adjust brightness |
+| Power (short press) | Lock / unlock screen |
+| Power (hold 5s) | Shut down |
+| SELECT + START | Quit app |
 
 ## Settings
 
-- **Themes** - Choose from 17 visual themes (Classic iPod, Dark, Dark Blue, Light, Nord, Solarized Dark, Matrix Green, Retro Amber, Purple Haze, Cyberpunk, Coffee, Ocean, Forest, Sunset, Neon, Midnight, Gruvbox, Candy)
-- **Lock Key** - Customize which button locks/unlocks the screen (Y, X, or SELECT). The Miyoo Mini Plus doesn't support suspend mode natively, so the lock key prevents accidental presses during playback
-- **Fetch Album Art** - Automatically download missing album artwork from MusicBrainz
-- **Check for Updates** - Manually check for and install OTA updates
-- **Update Notifications** - Toggle automatic update prompts on/off
-- **Clear App Data** - Reset library cache, settings, and artwork
-- **Toggle Logs** - Enable or disable debug logging
-- **Rescan Library** - Force a complete rescan of your music library
-- **About** - View app version and check for updates
-
-## Technical Details
-
-Built using **Go 1.22.2** with native C bindings (CGO) for graphics and audio.
-
-### Architecture
-- **Platform:** Miyoo Mini Plus, Mini v4, Mini Flip / OnionOS
-- **CPU:** ARM Cortex-A7 (dual-core)
-- **Resolution:** 640×480 native
-- **Cross-compilation:** arm-linux-gnueabihf-gcc
-
-### Key Libraries
-- **SDL2** - Graphics, input handling, window management
-- **SDL2_mixer** - Audio playback with MP3 decoding (libmpg123)
-- **fogleman/gg** - 2D graphics rendering
-- **dhowden/tag** - ID3 tag parsing
-- **golang.org/x/image** - Image processing and font rendering
-
-### Performance Optimizations
-- Dual-core utilization (UI and audio on separate cores)
-- Pre-rendered digit sprites for time display
-- Text measurement and album art caching
-- Library metadata cached as JSON for fast startup
+- **Themes** — 17 themes: Classic iPod, Dark, Dark Blue, Light, Nord, Solarized Dark, Matrix Green, Retro Amber, Purple Haze, Cyberpunk, Coffee, Ocean, Forest, Sunset, Neon, Midnight, Gruvbox, Candy
+- **Fetch Album Art** — Download missing artwork from MusicBrainz (requires WiFi)
+- **Check for Updates** — Manually check for OTA updates
+- **Update Notifications** — Toggle automatic update prompts
+- **Rescan Library** — Force a full rescan of your music library
+- **Clear App Data** — Reset library cache, settings, and artwork
+- **Toggle Logs** — Enable debug logging to `miyoopod.log`
+- **About** — View current version
 
 ## Troubleshooting
 
-### App does not launch / crashes on startup
-
-The library cache files may be corrupted. Connect your SD card to your computer and delete the hidden JSON files in the music folder:
-
+**App won't launch**
+Delete the library cache files from your SD card and let MiyooPod rebuild them:
 ```
 /mnt/SDCARD/Media/Music/.miyoopod_library.json
 /mnt/SDCARD/Media/Music/.miyoopod_state.json
 ```
 
-MiyooPod will rescan your library on the next launch.
+**Album art not showing**
+Go to **Settings → Clear App Data**, then use **Fetch Album Art** to re-download.
 
-### Album art not displaying correctly
-
-Open **Settings** → **Clear App Data** to wipe the artwork cache and library metadata. MiyooPod will rebuild everything on the next launch. You can then use **Fetch Album Art** again to re-download missing covers.
-
-### Checking logs
-
-If the app is misbehaving, enable logging from **Settings** → **Toggle Logs**, then reproduce the issue and check the log file on your SD card:
-
+**Checking logs**
+Enable logging from **Settings → Toggle Logs**, reproduce the issue, then check:
 ```
 /mnt/SDCARD/App/MiyooPod/miyoopod.log
 ```
 
-Attach this file when reporting a bug on [GitHub Issues](https://github.com/danfragoso/miyoopod/issues).
-
-### A broken OTA update made the app unusable
-
-If an update left the app in a broken state, manually reinstall the latest version:
-
-1. Download [MiyooPod.zip](https://github.com/danfragoso/miyoopod/raw/refs/heads/main/releases/MiyooPod.zip)
-2. Extract and copy the `MiyooPod` folder to `/App` on your SD card, overwriting the existing files
-3. Your music library and settings are stored separately and will not be affected
-
 ## Building from Source
 
-```bash
-# Cross-compile for ARM
-make go
-```
+Requires Docker and an ARM cross-compiler. The build runs inside a Debian Bullseye container to match the A30's glibc.
 
-The build process uses CGO to compile Go source with C bindings and bundles all required shared libraries.
+```bash
+# Build the Docker image (first time only)
+docker build -f Dockerfile.build -t miyoopod-builder .
+
+# Cross-compile for ARM
+docker run --rm \
+  -v $(pwd):/build -w /build \
+  -e CC=arm-linux-gnueabihf-gcc \
+  -e CGO_ENABLED=1 -e GOARCH=arm -e GOARM=7 -e GOOS=linux \
+  -e CGO_CFLAGS="-I/usr/include/arm-linux-gnueabihf" \
+  -e CGO_LDFLAGS="-L/build/App/MiyooPod/libs -Wl,-rpath-link,/build/App/MiyooPod/libs" \
+  miyoopod-builder \
+  go build -buildvcs=false -a -o App/MiyooPod/MiyooPod ./src/*.go
+```
 
 ## Changelog
 
-### Version 0.0.6
-- 🎵 FLAC and OGG/Vorbis playback support (decoded via statically linked drflac and stb_vorbis in SDL2_mixer)
-- 📝 Lyrics support: embedded lyrics (ID3 USLT, Vorbis comments) displayed with word-wrap and scroll
-- 🎤 LRC timed lyrics: synced highlighting of the current line with auto-scroll and manual scroll override
-- ⏩ Hold ↑/↓ to scroll lists continuously without repeated presses
-- ❌ SELECT + START to quit the app
+### v0.1.5
+- Seek precision fix: SDL_Delay after PlayMusic ensures mpg123 is warm before SetMusicPosition (eliminates near-zero seek failures on A30's ARM scheduler)
+- Fix seek display racing ahead of audio: wall-clock re-anchor now fires after seek completes, not during
+- Fix volume toast always showing 0%: corrected ALSA `amixer` output parsing
+- Fix audio cutout on volume press caused by volume incorrectly resetting to 0
+- Fix brightness adjustment affecting volume: re-sync ALSA state after brightness change
 
-### Version 0.0.5
-- 🔄 Over-the-air updates with download progress, checksum verification, and automatic rollback on failure
-- 🔍 Search: filter Artists, Albums, and Songs with an on-screen A-Z keyboard (press SELECT on any list)
-- ⏩ Seek/fast-forward/rewind: hold L or R on the Now Playing screen with accelerating speed
-- 💾 Session persistence: queue, playback position, shuffle/repeat state, and current track restored across launches
-- 📜 Header marquee: now-playing track info scrolls in the header bar when browsing menus
-- 🛡️ Crash reporting: fatal panics and C-level signals are logged and reported automatically
-- 🗑️ Clear App Data option in Settings to reset library cache, settings, and artwork
-- ⚡ Faster startup: version check no longer blocks splash screen; album art uses fast RGBA pixel cache on disk
-- 🔄 Non-blocking library scan with dedicated progress screen showing track count, current folder, and phase
-- 🖼️ Non-blocking album art fetch with progress bar, percentage, and cancel/retry support
-- 🔊 Volume and brightness persisted across app launches
-- 🖼️ Background album art extraction from MP3 tags after startup
-- 🔔 Toggle update notifications on/off from Settings
-- 🔍 Manual "Check for Updates" option in Settings
-- 🐛 Fixed race conditions where background goroutines corrupted the framebuffer causing panics
-- 🐛 Fixed volume/brightness overlay screen flash caused by partial framebuffer updates
-- 🐛 Fixed volume resetting on every launch
+### v0.1.4
+- A30 port: custom SDL2_mixer 2.6.3 bundled for accurate seek and position reporting
+- Tracks loaded into RAM before playback to eliminate SD card I/O during seek
+- Software wall-clock position fallback (Mix_GetMusicPosition returns 0 on A30's mpg123 backend)
+- Seek hold/accelerate: 5s → 10s → 30s jumps on hold
+- Shuffle fix: reset current index after building shuffle order
+- Session restore: deferred seek no longer blocks app launch
+- OTA updater rebuilt for A30 (no libmi_ao.so dependency)
 
-### Version 0.0.4
-- 🔊 Fixed volume control using MI_AO ioctl (correct indirect buffer layout matching Onion/keymon)
-- 🔊 Fixed volume icon SVG being cut off in the overlay
--  🔒 Added screen lock with power button
-- 🔒 Added auto screen lock setting (1/3/5/10 min or disabled)
-- 🔒 Added screen peek toggle setting (enable/disable screen wake on button press while locked)
-- 🐛 Fixed brightness and volume being adjustable while screen is locked
-- 🐛 Fixed now playing progress bar drawing over the lock overlay
+### v0.0.6
+- FLAC and OGG/Vorbis playback
+- Lyrics: embedded (ID3 USLT, Vorbis) and LRC timed sync with auto-scroll
+- Hold up/down to scroll lists continuously
 
-### Version 0.0.3
-- 🔧 Fixed PostHog logging initialization order
-- 📊 C logs from SDL initialization now properly captured
-- 📱 Device model detection and reporting (Mini Plus, Mini v4, Mini Flip)
-- 📏 Display resolution metrics sent to analytics
-- 🔀 Independent local logs and developer logs settings
+### v0.0.5
+- Over-the-air updates with checksum verification and rollback
+- Search with on-screen A-Z keyboard
+- Seek with accelerating hold speed
+- Session persistence
+- Header marquee for long track names
+- Crash reporting
 
-### Version 0.0.2
-- ✨ Added support for Miyoo Mini v4 (750×560 resolution)
-- ✨ Added support for Miyoo Mini Flip (750×560 resolution)
-- 🔧 Automatic resolution detection via framebuffer device
-- 🎨 UI scaling adapts to different screen sizes while maintaining aspect ratio
-- 🐛 Disabled local logs by default (developer logs still enabled)
+## Credits
 
-### Version 0.0.1
-- 🎉 Initial release
-- 🎵 iPod-inspired user interface
-- 🎨 11 customizable themes
-- 🖼️ Album art display and automatic fetching from MusicBrainz
-- 🔀 Shuffle and repeat modes
-- 📱 Optimized for Miyoo Mini Plus (640×480)
-
-## Contributing
-
-MiyooPod is open-source! Contributions are welcome.
-
-- **Report bugs:** [GitHub Issues](https://github.com/danfragoso/miyoopod/issues)
-- **Request features:** [New Issue](https://github.com/danfragoso/miyoopod/issues/new)
-- **Submit PRs:** [Pull Requests](https://github.com/danfragoso/miyoopod/pulls)
+Based on [MiyooPod](https://github.com/danfragoso/miyoopod) by [Danilo Fragoso](https://github.com/danfragoso).
 
 ## License
 
 Open Source
-
-## Author
-
-Created by [Danilo Fragoso](https://github.com/danfragoso)
-
----
-
