@@ -8,6 +8,8 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout
@@ -49,6 +51,32 @@ jobs:
         run: |
           cd App/MiyooPod
           zip -r ../../MiyooPod-${{ steps.version.outputs.VERSION }}.zip .
+
+      - name: Update version.json
+        run: |
+          VERSION=${{ steps.version.outputs.VERSION }}
+          VERSION_NUM=${VERSION#v}
+          ZIP="MiyooPod-${VERSION}.zip"
+          CHECKSUM="sha256:$(sha256sum ${ZIP} | cut -d' ' -f1)"
+          SIZE=$(stat -c%s ${ZIP})
+          URL="https://github.com/amruthwo/MiyooPod-A30/releases/download/${VERSION}/${ZIP}"
+          python3 -c "
+import json
+with open('version.json') as f:
+    v = json.load(f)
+v['version'] = '${VERSION_NUM}'
+v['checksum'] = '${CHECKSUM}'
+v['url'] = '${URL}'
+v['size'] = ${SIZE}
+with open('version.json', 'w') as f:
+    json.dump(v, f, indent=4)
+    f.write('\n')
+"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add version.json
+          git commit -m "Update version.json for ${VERSION} [skip ci]"
+          git push origin HEAD:main
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
