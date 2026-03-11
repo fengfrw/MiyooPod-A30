@@ -18,10 +18,11 @@ jobs:
         with:
           go-version: '1.21'
 
-      - name: Install ARM cross-compiler
+      - name: Install ARM cross-compiler and SDL2 headers
         run: |
+          sudo dpkg --add-architecture armhf
           sudo apt-get update
-          sudo apt-get install -y gcc-arm-linux-gnueabihf
+          sudo apt-get install -y gcc-arm-linux-gnueabihf libsdl2-dev:armhf libsdl2-mixer-dev:armhf
 
       - name: Inject PostHog token
         run: |
