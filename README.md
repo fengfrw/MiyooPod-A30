@@ -56,7 +56,7 @@ MP3 at 256kbps CBR or VBR V0 is recommended for best performance on the A30's AR
 | L / R | Seek backward / forward (hold to accelerate) |
 | Volume Up / Down | Adjust volume |
 | SELECT + Volume Up / Down | Adjust brightness |
-| Power (short press) | Lock / unlock screen |
+| Double-Tap Y | Lock / unlock screen |
 | Power (hold 5s) | Shut down |
 | SELECT + START | Quit app |
 | R2 / L2 | Move through albums/artists/songs by letter |
