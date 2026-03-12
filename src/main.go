@@ -207,6 +207,13 @@ func main() {
 	app := createApp()
 	app.Init()
 
+	// If SDL init failed, DC is nil — exit cleanly rather than crashing
+	if app.DC == nil {
+		logMsg("FATAL: Aborting — SDL init failed, cannot continue")
+		time.Sleep(2 * time.Second)
+		os.Exit(1)
+	}
+
 	runUIDone := make(chan struct{})
 	go func() {
 		app.RunUI()

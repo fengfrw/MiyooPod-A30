@@ -104,11 +104,45 @@ int refreshScreenPtr(unsigned char *pixels) {
 }
 int init() {
     c_log("SDL2 init (VIDEO | AUDIO)...");
-    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) < 0) {
-        c_logf("SDL_Init failed: %s", SDL_GetError());
+
+    // Try SDL_VIDEODRIVER from environment first, then fall back to known drivers.
+    // Different SpruceOS versions use different driver names.
+    const char *env_driver = getenv("SDL_VIDEODRIVER");
+    const char *fallbacks[] = {"a30", "mali", "MALI", "fbdev", NULL};
+
+    int init_ok = 0;
+
+    // Try env driver first if set
+    if (env_driver && env_driver[0]) {
+        if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) >= 0) {
+            c_logf("SDL_Init OK with driver: %s", env_driver);
+            init_ok = 1;
+        } else {
+            c_logf("SDL_Init failed with driver %s: %s", env_driver, SDL_GetError());
+            SDL_Quit();
+        }
+    }
+
+    // Try fallbacks if env driver failed or wasn't set
+    if (!init_ok) {
+        for (int i = 0; fallbacks[i] != NULL; i++) {
+            // Skip if same as env driver we already tried
+            if (env_driver && strcmp(env_driver, fallbacks[i]) == 0) continue;
+            setenv("SDL_VIDEODRIVER", fallbacks[i], 1);
+            if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) >= 0) {
+                c_logf("SDL_Init OK with fallback driver: %s", fallbacks[i]);
+                init_ok = 1;
+                break;
+            }
+            c_logf("SDL_Init failed with driver %s: %s", fallbacks[i], SDL_GetError());
+            SDL_Quit();
+        }
+    }
+
+    if (!init_ok) {
+        c_log("SDL_Init failed with all drivers");
         return -1;
     }
-    c_log("SDL_Init OK");
     // Detect display resolution from framebuffer device
     int fb_detect = open("/dev/fb0", O_RDONLY);
     int display_width = 640, display_height = 480;
