@@ -1,7 +1,7 @@
 {
-  "version": "0.1.5",
-  "checksum": "sha256:5150a3d06e04c33d34763a0861710f8e7273047885d8351906c0a17196e583bf",
-  "url": "https://github.com/amruthwo/MiyooPod-A30/releases/download/v0.1.5/MiyooPod-v0.1.5.zip",
-  "size": 17728321,
+  "version": "0.1.6",
+  "checksum": "sha256:74bf5242f786ea622173667a5b79f992034e8e749c8f857a31d27ee0a832dbcf",
+  "url": "https://github.com/amruthwo/MiyooPod-A30/releases/download/v0.1.6/MiyooPod-v0.1.6.zip",
+  "size": 17727489,
   "changelog": "Seek precision fix, volume sync, brightness fix"
 }
