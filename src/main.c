@@ -118,7 +118,8 @@ int init() {
             c_logf("SDL_Init OK with driver: %s", env_driver);
             init_ok = 1;
         } else {
-            c_logf("SDL_Init failed with driver %s: %s", env_driver, SDL_GetError());
+            c_logf("SDL_Init failed with env driver: %s", env_driver);
+            c_logf("SDL_Init error: %s", SDL_GetError());
             SDL_Quit();
         }
     }
@@ -134,7 +135,8 @@ int init() {
                 init_ok = 1;
                 break;
             }
-            c_logf("SDL_Init failed with driver %s: %s", fallbacks[i], SDL_GetError());
+            c_logf("SDL_Init failed with fallback driver: %s", fallbacks[i]);
+            c_logf("SDL_Init error: %s", SDL_GetError());
             SDL_Quit();
         }
     }
